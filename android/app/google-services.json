@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "429823195634",
+    "project_id": "qlbh-c1de4",
+    "storage_bucket": "qlbh-c1de4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:429823195634:android:004e5c04afdd67468c136b",
+        "android_client_info": {
+          "package_name": "com.qlbh_app_2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5BoJmBP85zozZoov2d2KKvvHIyu66inU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

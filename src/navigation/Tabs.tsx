@@ -3,11 +3,10 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StyleSheet } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getFocusedRouteNameFromRoute } from "@react-navigation/native";
 
 import HomeStack from "./HomeStack";
 import SettingStack from "./SettingStack";
-// import ScanStack from "./ScanStack";
+import CashBookScreen from "../screens/CashBook/CashBookScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -45,31 +44,29 @@ export default function Tabs() {
         }}
       />
 
-      {/* SCAN */}
-      {/* <Tab.Screen
-        name="ScanTab"
-        component={ScanStack}
-        options={({ route }) => {
-          const routeName = getFocusedRouteNameFromRoute(route) ?? "Scan";
-          const isScanScreen = routeName === "Scan";
-
-          return {
-            title: "Quét QR",
-            tabBarIcon: ({ color }) => (
-              <Ionicons name="qr-code-outline" size={24} color={color} />
-            ),
-            tabBarStyle: [
-              {
-                backgroundColor: isScanScreen ? "#3A3A3A" : "#FF3333",
-                borderTopWidth: StyleSheet.hairlineWidth,
-                borderTopColor: "#000",
-                height: TAB_HEIGHT + insets.bottom,
-                paddingBottom: insets.bottom,
-              },
-            ],
-          };
+      {/* BÁO CÁO */}
+      <Tab.Screen
+        name="ReportTab"
+        component={HomeStack} // Sử dụng HomeStack tạm thời, có thể thay bằng ReportStack khi có
+        options={{
+          title: "Báo cáo",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="bar-chart-outline" size={24} color={color} />
+          ),
         }}
-      /> */}
+      />
+
+      {/* SỔ QUỸ */}
+      <Tab.Screen
+        name="CashBookTab"
+        component={CashBookScreen}
+        options={{
+          title: "Sổ quỹ",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="wallet-outline" size={24} color={color} />
+          ),
+        }}
+      />
 
       {/* SETTING */}
       <Tab.Screen
