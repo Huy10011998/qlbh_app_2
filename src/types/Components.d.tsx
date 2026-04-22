@@ -1,4 +1,5 @@
 import { StyleProp, ViewStyle } from "react-native";
+import { Transaction } from "./Api.d";
 
 export type IsLoadingProps = {
   size?: "small" | "large";
@@ -23,3 +24,17 @@ export interface MenuItemComponent {
   notificationCount?: number;
   onPress?: () => void;
 }
+
+export type ListItem =
+  | { kind: "dateHeader"; date: string; thu: number; chi: number }
+  | {
+      children: any;
+      kind: "categoryHeader";
+      category: string;
+      count: number;
+      amount: number;
+      type: "thu" | "chi";
+    }
+  | { kind: "row"; data: Transaction };
+
+export type ViewMode = "date" | "category";

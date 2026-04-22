@@ -20,12 +20,7 @@ import IsLoading from "../../components/ui/IconLoading";
 // import { changePasswordApi } from "../../services/Index";
 import { API_ENDPOINTS } from "../../config/Index";
 import { StackNavigation, UserInfo } from "../../types";
-import {
-  callApi,
-  clearTokenStorage,
-  hardResetApi,
-  resetAuthState,
-} from "../../services/data/CallApi";
+import { callApi } from "../../services/data/CallApi";
 // import ReactNativeBiometrics from "react-native-biometrics";
 // import AsyncStorage from "@react-native-async-storage/async-storage";
 // import { clearPermissions } from "../../store/PermissionSlice";
@@ -206,13 +201,8 @@ const SettingScreen = () => {
     setIsLoading(true);
 
     try {
-      hardResetApi();
-      resetAuthState();
-      await clearTokenStorage();
       await logout();
-      // dispatch(clearPermissions());
       setIsFaceIdEnabled(false);
-      // await AsyncStorage.removeItem("faceid-enabled");
     } finally {
       setIsLoading(false);
     }
@@ -397,7 +387,12 @@ const SettingScreen = () => {
 // STYLE
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  profileHeader: { alignItems: "center", padding: 16 },
+  profileHeader: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
 
   avatar: {
     width: 60,
@@ -407,7 +402,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
-    marginRight: 12,
   },
 
   avatarImage: { width: "100%", height: "100%", resizeMode: "cover" },
@@ -432,7 +426,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
 
-  label: { flex: 1, fontSize: 13, fontWeight: "bold", color: "#333" },
+  label: { flex: 1, fontSize: 15, fontWeight: "bold", color: "#333" },
 
   modalOverlay: {
     flex: 1,

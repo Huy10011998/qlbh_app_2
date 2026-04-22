@@ -1,9 +1,13 @@
 import axios, { AxiosError, AxiosInstance } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_ENDPOINTS, BASE_URL } from "../../config/Index";
+import { Platform } from "react-native";
+import messaging from "@react-native-firebase/messaging";
 import { log, warn } from "../../utils/Logger";
 import { LogoutReason } from "../../types/Context.d";
 import { withTimeout } from "../../utils/Helper";
+import { API_ENDPOINTS, BASE_URL } from "../../config/API";
+
+const USER_ID_STORAGE_KEY = "userId";
 
 // GLOBAL LOGOUT HANDLER
 let onAuthLogout: ((reason?: LogoutReason) => Promise<void>) | null = null;
@@ -56,6 +60,48 @@ export const clearTokenStorage = async () => {
   cachedToken = null;
   cachedRefresh = null;
   await AsyncStorage.multiRemove(["token", "refreshToken"]);
+};
+
+export const setStoredUserId = async (userId: number | null) => {
+  if (userId == null) {
+    await AsyncStorage.removeItem(USER_ID_STORAGE_KEY);
+  } else {
+    await AsyncStorage.setItem(USER_ID_STORAGE_KEY, String(userId));
+  }
+};
+
+export const getStoredUserId = async (): Promise<number | null> => {
+  const stored = await AsyncStorage.getItem(USER_ID_STORAGE_KEY);
+  if (!stored) return null;
+  const value = Number(stored);
+  return Number.isNaN(value) ? null : value;
+};
+
+export const fetchCurrentUserId = async (): Promise<number | null> => {
+  const stored = await getStoredUserId();
+  if (stored != null) return stored;
+
+  try {
+    const response = await callApi<any>("POST", API_ENDPOINTS.GET_INFO, {});
+    const id =
+      response?.data?.iD_User ??
+      response?.data?.ID_User ??
+      response?.data?.userId ??
+      response?.data?.id ??
+      response?.data?.ID ??
+      null;
+
+    if (id == null) return null;
+
+    const parsed = Number(id);
+    if (Number.isNaN(parsed)) return null;
+
+    await setStoredUserId(parsed);
+    return parsed;
+  } catch (e: any) {
+    warn("[API] fetchCurrentUserId failed", e);
+    return null;
+  }
 };
 
 export const resetRefreshState = () => {
@@ -301,5 +347,57 @@ export const callApi = async <T>(
     });
 
     throw error; // nhớ throw lại để screen handle
+  }
+};
+
+// API functions
+export const soquy = async <T = any>(tuNgay: string, denNgay: string) =>
+  callApi<T>("POST", API_ENDPOINTS.HOADON_SO_QUY, {
+    tuNgay,
+    denNgay,
+    isSum: true,
+  });
+
+export const updateFCMToken = async <T = any>(
+  iD_User: number | null,
+  fcmToken: string,
+  platform: string,
+  isActive: boolean,
+  createdAt: string,
+  updatedAt: string,
+) =>
+  callApi<T>("POST", API_ENDPOINTS.UPDATE_FCM_TOKEN, {
+    iD_User: iD_User ?? 0,
+    fcmToken,
+    platform,
+    isActive,
+    createdAt,
+    updatedAt,
+  });
+
+export const sendFCMActiveStatus = async (
+  isActive: boolean,
+  userId: number | null = null,
+) => {
+  try {
+    const fcmToken = await messaging().getToken();
+    if (!fcmToken) {
+      warn("[API] No FCM token available");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const id =
+      userId ?? (await getStoredUserId()) ?? (await fetchCurrentUserId());
+
+    await updateFCMToken(id, fcmToken, Platform.OS, isActive, now, now);
+    log("[API] updateFCMToken success", {
+      iD_User: id,
+      fcmToken,
+      platform: Platform.OS,
+      isActive,
+    });
+  } catch (e: any) {
+    warn("[API] updateFCMToken failed", e);
   }
 };

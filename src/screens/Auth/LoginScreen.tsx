@@ -21,7 +21,9 @@ import IsLoading from "../../components/ui/IconLoading";
 // import { setPermissions } from "../../store/PermissionSlice";
 import {
   hardResetApi,
+  sendFCMActiveStatus,
   setRefreshInApi,
+  setStoredUserId,
   setTokenInApi,
 } from "../../services/data/CallApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -63,11 +65,26 @@ export default function LoginScreen() {
       const res = await loginApi(userName, userPassword);
 
       if (res?.data?.accessToken) {
-        await setToken(res.data.accessToken);
-        await setRefreshToken(res.data.refreshToken ?? null);
+        const loginResponseData = res.data as any;
 
-        setTokenInApi(res.data.accessToken);
-        setRefreshInApi(res.data.refreshToken ?? null);
+        await setToken(loginResponseData.accessToken);
+        await setRefreshToken(loginResponseData.refreshToken ?? null);
+
+        setTokenInApi(loginResponseData.accessToken);
+        setRefreshInApi(loginResponseData.refreshToken ?? null);
+
+        const loginUserId =
+          loginResponseData?.iD_User ??
+          loginResponseData?.ID_User ??
+          loginResponseData?.userId ??
+          loginResponseData?.id ??
+          null;
+
+        await setStoredUserId(
+          typeof loginUserId === "string" ? Number(loginUserId) : loginUserId,
+        );
+
+        await sendFCMActiveStatus(true, loginUserId ?? null);
 
         // Lưu lại login thường (không phải FaceID)
         await Keychain.setGenericPassword(userName, userPassword, {
@@ -157,11 +174,26 @@ export default function LoginScreen() {
       );
 
       if (response?.data?.accessToken) {
-        await setToken(response.data.accessToken);
-        await setRefreshToken(response.data.refreshToken ?? null);
+        const loginResponseData = response.data as any;
 
-        setTokenInApi(response.data.accessToken);
-        setRefreshInApi(response.data.refreshToken ?? null);
+        await setToken(loginResponseData.accessToken);
+        await setRefreshToken(loginResponseData.refreshToken ?? null);
+
+        setTokenInApi(loginResponseData.accessToken);
+        setRefreshInApi(loginResponseData.refreshToken ?? null);
+
+        const loginUserId =
+          loginResponseData?.iD_User ??
+          loginResponseData?.ID_User ??
+          loginResponseData?.userId ??
+          loginResponseData?.id ??
+          null;
+
+        await setStoredUserId(
+          typeof loginUserId === "string" ? Number(loginUserId) : loginUserId,
+        );
+
+        await sendFCMActiveStatus(true, loginUserId ?? null);
 
         // const permissionRes = await getPermission();
         // dispatch(setPermissions(permissionRes.data));

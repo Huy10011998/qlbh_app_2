@@ -10,7 +10,9 @@ import React, {
 import * as Keychain from "react-native-keychain";
 import {
   hardResetApi,
+  sendFCMActiveStatus,
   setOnAuthLogout,
+  setStoredUserId,
   setTokenInApi,
   setRefreshInApi,
   resetAuthState,
@@ -40,6 +42,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     setLogoutReason(reason);
     setIsLoading(true);
     try {
+      await sendFCMActiveStatus(false);
       hardResetApi();
       await AsyncStorage.multiRemove([
         "token",
@@ -48,6 +51,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       ]);
       await Keychain.resetGenericPassword({ service: "auth-login" });
     } finally {
+      await setStoredUserId(null);
       setTokenState(null);
       setIosAuthenticated(false);
       setIsLoading(false);

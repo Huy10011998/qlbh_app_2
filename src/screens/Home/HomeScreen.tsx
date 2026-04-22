@@ -41,7 +41,7 @@ const HomeScreen: React.FC = () => {
       color: "#0F4D3A",
       subColor: "#E1F5EE",
       subIconColor: "#0F6E56",
-      onPress: () => navigation.navigate("Asset"),
+      // onPress: () => navigation.navigate("Asset"),
       subItems: [
         { id: "1-1", label: "Hoá đơn", iconName: "receipt-outline" },
         { id: "1-2", label: "Sản phẩm", iconName: "shirt-outline" },
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   },
 
   groupDesc: {
-    fontSize: 12,
+    fontSize: 15,
     color: "rgba(255,255,255,0.65)",
     marginTop: 1,
   },
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   },
 
   subLabel: {
-    fontSize: 11,
+    fontSize: 15,
     color: "#555",
     textAlign: "center",
   },

@@ -1,8 +1,9 @@
 import axios from "axios";
 import { API_ENDPOINTS, BASE_URL } from "../../config/Index";
-import { LoginResponse } from "../../types/Api.d";
+import { ChangePasswordResponse, LoginResponse } from "../../types/Api.d";
 import { md5Hash } from "../../utils/Helper";
 import { error } from "../../utils/Logger";
+import { callApi } from "../data/CallApi";
 
 export const authApi = axios.create({
   baseURL: BASE_URL,
@@ -31,24 +32,24 @@ export const loginApi = async (
   }
 };
 
-// export const changePasswordApi = async (
-//   oldPassword: string,
-//   newPassword: string,
-// ): Promise<ChangePasswordResponse> => {
-//   try {
-//     const hashedOldPassword = await md5Hash(oldPassword);
-//     const hashedNewPassword = await md5Hash(newPassword);
+export const changePasswordApi = async (
+  oldPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResponse> => {
+  try {
+    const hashedOldPassword = await md5Hash(oldPassword);
+    const hashedNewPassword = await md5Hash(newPassword);
 
-//     return await callApi<ChangePasswordResponse>(
-//       "POST",
-//       API_ENDPOINTS.CHANGE_PASSWORD,
-//       {
-//         oldPassword: hashedOldPassword,
-//         newPassword: hashedNewPassword,
-//       },
-//     );
-//   } catch (e) {
-//     error("[Auth] ChangePassword API error:", e);
-//     throw e;
-//   }
-// };
+    return await callApi<ChangePasswordResponse>(
+      "POST",
+      API_ENDPOINTS.CHANGE_PASSWORD,
+      {
+        oldPassword: hashedOldPassword,
+        newPassword: hashedNewPassword,
+      },
+    );
+  } catch (e) {
+    error("[Auth] ChangePassword API error:", e);
+    throw e;
+  }
+};

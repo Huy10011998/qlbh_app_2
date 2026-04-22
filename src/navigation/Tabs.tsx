@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import HomeStack from "./HomeStack";
 import SettingStack from "./SettingStack";
 import CashBookScreen from "../screens/CashBook/CashBookScreen";
+import OrderBrowsingStack from "./OrderBrowsingStack";
+import ListOfDishesAlreadyServedStack from "./ListOfDishesAlreadyServed";
 
 const Tab = createBottomTabNavigator();
 
@@ -20,7 +22,7 @@ export default function Tabs() {
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
-        lazy: false,
+        lazy: true,
         tabBarLabelStyle: styles.label,
         tabBarActiveTintColor: "#fff",
         tabBarStyle: {
@@ -44,14 +46,26 @@ export default function Tabs() {
         }}
       />
 
-      {/* BÁO CÁO */}
+      {/* DUYỆT ĐƠN ĐẶT HÀNG */}
       <Tab.Screen
-        name="ReportTab"
-        component={HomeStack} // Sử dụng HomeStack tạm thời, có thể thay bằng ReportStack khi có
+        name="OrderBrowsingTab"
+        component={OrderBrowsingStack}
         options={{
-          title: "Báo cáo",
+          title: "Duyệt đơn hàng",
           tabBarIcon: ({ color }) => (
-            <Ionicons name="bar-chart-outline" size={24} color={color} />
+            <Ionicons name="cart-outline" size={24} color={color} />
+          ),
+        }}
+      />
+
+      {/* DANH SÁCH ĐÃ LÊN MÓN */}
+      <Tab.Screen
+        name="ListOfDishesAlreadyServedTab"
+        component={ListOfDishesAlreadyServedStack}
+        options={{
+          title: "DS đã lên món",
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="checkmark-circle" size={24} color={color} />
           ),
         }}
       />
