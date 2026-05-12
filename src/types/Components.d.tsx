@@ -1,5 +1,5 @@
 import { StyleProp, ViewStyle } from "react-native";
-import { Transaction } from "./Api.d";
+import { ChungTu, Transaction } from "./Api.d";
 
 export type IsLoadingProps = {
   size?: "small" | "large";
@@ -38,3 +38,9 @@ export type ListItem =
   | { kind: "row"; data: Transaction };
 
 export type ViewMode = "date" | "category";
+
+export interface ChungTuItemProps {
+  item: ChungTu;
+  checked: boolean;
+  onToggle: (id: string) => void;
+}

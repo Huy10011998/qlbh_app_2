@@ -1,5 +1,5 @@
 import md5 from "react-native-md5";
-import { QuickFilter } from "../types/Api.d";
+import { ChungTu, DatHangApiItem, QuickFilter } from "../types/Api.d";
 
 // Hash MD5
 export function md5Hash(input: string): string {
@@ -143,3 +143,39 @@ export const getHeaderSubtitle = (
     }
   }
 };
+
+// Chuyển từ API item sang ChungTu
+export const formatNgay = (iso?: string): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+};
+
+// Chuyển từ API item sang ChungTu
+export const formatThoiGian = (iso?: string): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.substring(0, 5);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+export const formatTien = (so?: number | null): string => {
+  if (so == null || isNaN(so)) return "0đ";
+  return so.toLocaleString("vi-VN") + "đ";
+};
+
+export const mapApiItem = (item: DatHangApiItem): ChungTu => ({
+  id: String(item.id ?? Math.random()),
+  rawId: item.id ?? 0,
+  maDatHang: item.maDatHang ?? "",
+  ngay: formatNgay(item.ngayDatHang),
+  thoiGian: formatThoiGian(item.ngayDatHang),
+  viTri: item.iD_BanCaPhe_MoTa ?? item.thongTinDat ?? "",
+  trangThai: item.iD_TrangThaiPhucVu_MoTa ?? "",
+  tongTien: item.tongTien ?? 0,
+  iD_TrangThaiPhucVu: item.iD_TrangThaiPhucVu ?? 1,
+  chiTiet: [], // sẽ điền sau
+});

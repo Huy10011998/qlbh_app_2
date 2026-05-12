@@ -1,4 +1,4 @@
-export const BASE_URL = "http://42.1.120.149:5038/api";
+export const BASE_URL = "http://192.168.100.13:5038/api";
 
 export const BASE_URL_PDF = "https://api.cholimexfood.com.vn/";
 
@@ -27,4 +27,13 @@ export const API_ENDPOINTS = {
 
   // UPDATE FCM TOKEN
   UPDATE_FCM_TOKEN: `${BASE_URL}/Common/update-fcm-token`,
+
+  // DANH SÁCH ĐẶT HÀNG CÀ PHÊ
+  DANH_SACH_DAT_HANG_CA_PHE: `${BASE_URL}/DonDatHang/get-list-dat-hang-ban-ca-phe`,
+
+  // DANH SÁCH ĐẶT HÀNG CÀ PHÊ CHI TIẾT
+  CHI_TIET_DAT_HANG_CA_PHE: `${BASE_URL}/DonDatHang/get-list-dat-hang-ban-ca-phe-chi-tiet`,
+
+  // UPDATE TRANG THAI PHUC VU
+  UPDATE_TRANG_THAI_PHUC_VU: `${BASE_URL}/DonDatHang/update-trang-thai-phuc-vu-dat-hang-ban-ca-phe`,
 };

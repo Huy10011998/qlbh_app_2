@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,85 +6,66 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
+import { formatTien, mapApiItem } from "../../utils/Helper";
+import {
+  danhSachDatHangCaPhe,
+  danhSachDatHangCaPheChiTiet,
+} from "../../services/data/CallApi";
+import { DatHangApiItem } from "../../types/Api.d";
+import { subscribeAppRefetch } from "../../utils/AppRefetchBus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ChiTietHienThi {
+  tenSanPham: string;
+  soLuong: number;
+  giaTien: number;
+}
 
 interface PhieuDaLenMon {
   id: string;
   maSo: string;
-  ngayDuyet: string; // thời điểm được duyệt / lên món
-  viTri: string; // Bàn 1, Sân 2…
-  tenSanPham: string;
-  soLuong: number;
-  donVi: string;
+  ngayDuyet: string;
+  viTri: string;
   nguoiDuyet: string;
-  soTien: number;
+  tongTienPhieu: number;
+  danhSachMon: ChiTietHienThi[];
 }
 
-// ─── Mock data (chỉ các phiếu trạng thái "da_len_mon") ────────────────────────
+// ─── API response types ───────────────────────────────────────────────────────
 
-const danhSachDaLenMon: PhieuDaLenMon[] = [
-  {
-    id: "1",
-    maSo: "DCP-1958",
-    ngayDuyet: "20/04/2026 10:05",
-    viTri: "Bàn 1",
-    tenSanPham: "Ép ổi",
-    soLuong: 2,
-    donVi: "Ly",
-    nguoiDuyet: "Nguyễn Văn A",
-    soTien: 45000,
-  },
-  {
-    id: "2",
-    maSo: "DCP-1959",
-    ngayDuyet: "20/04/2026 10:12",
-    viTri: "Sân 2",
-    tenSanPham: "Nước suối",
-    soLuong: 5,
-    donVi: "Chai",
-    nguoiDuyet: "Trần Thị B",
-    soTien: 25000,
-  },
-  {
-    id: "3",
-    maSo: "DCP-1960",
-    ngayDuyet: "20/04/2026 10:28",
-    viTri: "Sân 1",
-    tenSanPham: "Coca-cola",
-    soLuong: 3,
-    donVi: "Lon",
-    nguoiDuyet: "Nguyễn Văn A",
-    soTien: 30000,
-  },
-  {
-    id: "4",
-    maSo: "DCP-1961",
-    ngayDuyet: "20/04/2026 10:45",
-    viTri: "Bàn 3",
-    tenSanPham: "Bò húc",
-    soLuong: 4,
-    donVi: "Lon",
-    nguoiDuyet: "Lê Văn C",
-    soTien: 60000,
-  },
-  {
-    id: "5",
-    maSo: "DCP-1955",
-    ngayDuyet: "20/04/2026 09:50",
-    viTri: "Sân 4",
-    tenSanPham: "Pepsi",
-    soLuong: 6,
-    donVi: "Lon",
-    nguoiDuyet: "Trần Thị B",
-    soTien: 48000,
-  },
-];
+interface ChiTietItem {
+  iD_DatHang_BanCaPhe: number;
+  iD_SanPham_MoTa: string | null;
+  soLuong: number;
+  giaTien: number;
+}
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Map API data → PhieuDaLenMon ────────────────────────────────────────────
 
-const formatTien = (so: number): string => so.toLocaleString("vi-VN") + " đ";
+const mapToPhieu = (
+  datHang: DatHangApiItem,
+  chiTiet: ChiTietItem[],
+): PhieuDaLenMon => {
+  const base = mapApiItem(datHang);
+
+  return {
+    id: base.id,
+    maSo: base.maDatHang,
+    ngayDuyet: `${base.ngay} ${base.thoiGian}`,
+    viTri: base.viTri,
+    nguoiDuyet: datHang.log_ID_User_MoTa || "—",
+    tongTienPhieu: base.tongTien,
+    danhSachMon: chiTiet.map((ct) => ({
+      tenSanPham: ct.iD_SanPham_MoTa ?? "—",
+      soLuong: ct.soLuong ?? 0,
+      giaTien: ct.giaTien ?? 0,
+    })),
+  };
+};
 
 // ─── Item ─────────────────────────────────────────────────────────────────────
 
@@ -93,7 +74,7 @@ const PhieuItem: React.FC<{ item: PhieuDaLenMon; index: number }> = ({
   index,
 }) => (
   <View style={styles.card}>
-    {/* Badge STT góc trái + badge "Đã lên món" góc phải */}
+    {/* Top row */}
     <View style={styles.cardTopRow}>
       <View style={styles.sttBadge}>
         <Text style={styles.sttText}>#{index + 1}</Text>
@@ -104,7 +85,7 @@ const PhieuItem: React.FC<{ item: PhieuDaLenMon; index: number }> = ({
       </View>
     </View>
 
-    {/* Mã phiếu + Ngày duyệt */}
+    {/* Mã + ngày giờ */}
     <View style={styles.row}>
       <Text style={styles.maSo}>{item.maSo}</Text>
       <Text style={styles.ngay}>{item.ngayDuyet}</Text>
@@ -118,22 +99,6 @@ const PhieuItem: React.FC<{ item: PhieuDaLenMon; index: number }> = ({
       <Text style={styles.infoValue}>{item.viTri}</Text>
     </View>
 
-    {/* Sản phẩm */}
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>Sản phẩm</Text>
-      <Text style={styles.infoValue}>{item.tenSanPham}</Text>
-    </View>
-
-    {/* Số lượng */}
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>Số lượng</Text>
-      <View style={styles.soLuongBadge}>
-        <Text style={styles.soLuongText}>
-          {item.soLuong} {item.donVi}
-        </Text>
-      </View>
-    </View>
-
     {/* Người duyệt */}
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>Người duyệt</Text>
@@ -142,10 +107,36 @@ const PhieuItem: React.FC<{ item: PhieuDaLenMon; index: number }> = ({
 
     <View style={styles.separator} />
 
-    {/* Thành tiền */}
+    {/* Danh sách món */}
+    {item.danhSachMon.length === 0 ? (
+      <Text style={styles.noMon}>Không có món</Text>
+    ) : (
+      item.danhSachMon.map((mon, idx) => (
+        <View key={idx}>
+          <View style={styles.monRow}>
+            <Text style={styles.monTen} numberOfLines={2}>
+              {mon.tenSanPham}
+            </Text>
+            <View style={styles.monRight}>
+              <View style={styles.soLuongBadge}>
+                <Text style={styles.soLuongText}>x{mon.soLuong}</Text>
+              </View>
+              <Text style={styles.monGia}>{formatTien(mon.giaTien)}</Text>
+            </View>
+          </View>
+          {idx < item.danhSachMon.length - 1 && (
+            <View style={styles.monDivider} />
+          )}
+        </View>
+      ))
+    )}
+
+    <View style={styles.separator} />
+
+    {/* Tổng tiền */}
     <View style={styles.tienRow}>
-      <Text style={styles.tienLabel}>Thành tiền</Text>
-      <Text style={styles.tienValue}>{formatTien(item.soTien)}</Text>
+      <Text style={styles.tienLabel}>Tổng tiền</Text>
+      <Text style={styles.tienValue}>{formatTien(item.tongTienPhieu)}</Text>
     </View>
   </View>
 );
@@ -163,8 +154,11 @@ const EmptyState: React.FC = () => (
 // ─── Summary header ───────────────────────────────────────────────────────────
 
 const SummaryHeader: React.FC<{ data: PhieuDaLenMon[] }> = ({ data }) => {
-  const tongTien = data.reduce((acc, i) => acc + i.soTien, 0);
-  const tongMon = data.reduce((acc, i) => acc + i.soLuong, 0);
+  const tongMon = data.reduce(
+    (acc, i) => acc + i.danhSachMon.reduce((a, m) => a + m.soLuong, 0),
+    0,
+  );
+  const tongTien = data.reduce((acc, i) => acc + i.tongTienPhieu, 0);
 
   return (
     <View style={styles.summary}>
@@ -188,33 +182,138 @@ const SummaryHeader: React.FC<{ data: PhieuDaLenMon[] }> = ({ data }) => {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const ListOfDishesAlreadyServed: React.FC = () => (
-  <SafeAreaView style={styles.safe}>
-    <StatusBar barStyle="dark-content" backgroundColor="#F7F8FA" />
-    <FlatList
-      data={danhSachDaLenMon}
-      keyExtractor={(i) => i.id}
-      ListHeaderComponent={
-        <>
-          <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>Danh sách đã lên món</Text>
-            <Text style={styles.sectionSub}>
-              {danhSachDaLenMon.length} phiếu · hôm nay
-            </Text>
-          </View>
-          {danhSachDaLenMon.length > 0 && (
-            <SummaryHeader data={danhSachDaLenMon} />
-          )}
-        </>
+const TRANG_THAI_DA_LEN_MON = 4;
+
+const ListOfDishesAlreadyServed: React.FC = () => {
+  const [data, setData] = useState<PhieuDaLenMon[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+
+      // 1️⃣ Lấy danh sách đặt hàng trạng thái "Đã lên món"
+      const res = await danhSachDatHangCaPhe<{
+        data: { items: DatHangApiItem[] };
+      }>(TRANG_THAI_DA_LEN_MON);
+
+      const items: DatHangApiItem[] = res?.data?.items ?? [];
+
+      if (items.length === 0) {
+        setData([]);
+        return;
       }
-      renderItem={({ item, index }) => <PhieuItem item={item} index={index} />}
-      ListEmptyComponent={<EmptyState />}
-      ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-      contentContainerStyle={styles.listContent}
-      showsVerticalScrollIndicator={false}
-    />
-  </SafeAreaView>
-);
+
+      // 2️⃣ Lấy ids rồi truyền vào chi tiết
+      const ids = items
+        .map((i) => i.id)
+        .filter((id): id is number => id !== undefined);
+
+      const chiTietRes = await danhSachDatHangCaPheChiTiet<{
+        data: { items: ChiTietItem[] };
+      }>(ids);
+
+      const chiTietAll: ChiTietItem[] = chiTietRes?.data?.items ?? [];
+
+      // 3️⃣ Map từng đặt hàng với chi tiết — 1 phiếu = 1 card
+      const mapped: PhieuDaLenMon[] = items.map((datHang) => {
+        const chiTietCuaPhieu = chiTietAll.filter(
+          (ct) => ct.iD_DatHang_BanCaPhe === datHang.id,
+        );
+        return mapToPhieu(datHang, chiTietCuaPhieu);
+      });
+
+      setData(mapped);
+    } catch (err) {
+      console.error("Lỗi fetch danh sách đã lên món:", err);
+      setError("Không thể tải dữ liệu. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeAppRefetch((source) => {
+      if (
+        source === "notification" ||
+        source === "foreground" ||
+        source === "network"
+      ) {
+        setRefreshing(true);
+        fetchData();
+      }
+    });
+    return unsub;
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData();
+  }, [fetchData]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.center]}>
+        <ActivityIndicator size="large" color={TEAL} />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.center]}>
+        <Text style={styles.errorText}>{error}</Text>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F7F8FA" />
+      <FlatList
+        data={data}
+        keyExtractor={(i) => i.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[TEAL]}
+            tintColor={TEAL}
+          />
+        }
+        // Trong FlatList
+        contentContainerStyle={[
+          styles.listContent,
+          data.length === 0 && styles.listContentEmpty,
+        ]}
+        ListHeaderComponent={
+          <>
+            <View style={styles.listHeader}>
+              <Text style={styles.sectionTitle}>Danh sách đã lên món</Text>
+              <Text style={styles.sectionSub}>
+                {data.length} phiếu · hôm nay
+              </Text>
+            </View>
+            {data.length > 0 && <SummaryHeader data={data} />}
+          </>
+        }
+        renderItem={({ item, index }) => (
+          <PhieuItem item={item} index={index} />
+        )}
+        ListEmptyComponent={<EmptyState />}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        showsVerticalScrollIndicator={false}
+      />
+    </SafeAreaView>
+  );
+};
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -225,60 +324,40 @@ const GREEN_BG = "#EDF7EE";
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#F7F8FA" },
+  center: { justifyContent: "center", alignItems: "center" },
   listContent: { paddingHorizontal: 12, paddingBottom: 24 },
+  errorText: { fontSize: 14, color: "#e53935", textAlign: "center" },
 
-  // Header
-  listHeader: {
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-  },
+  listHeader: { paddingVertical: 12, paddingHorizontal: 4 },
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: TEAL,
     letterSpacing: 0.1,
   },
-  sectionSub: {
-    fontSize: 15,
-    color: "#999",
-    marginTop: 2,
-  },
+  sectionSub: { fontSize: 15, color: "#999", marginTop: 2 },
 
-  // Summary strip
   summary: {
     flexDirection: "row",
     backgroundColor: "#fff",
     borderRadius: 12,
     paddingVertical: 14,
     marginBottom: 10,
-    // shadow
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  summaryNum: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: TEAL,
-    marginBottom: 2,
-  },
-  summaryLabel: {
-    fontSize: 15,
-    color: "#999",
-  },
+  summaryItem: { flex: 1, alignItems: "center" },
+  summaryNum: { fontSize: 15, fontWeight: "700", color: TEAL, marginBottom: 2 },
+  summaryLabel: { fontSize: 15, color: "#999" },
   summaryDivider: {
     width: StyleSheet.hairlineWidth,
     backgroundColor: "#e5e5e5",
     marginVertical: 4,
   },
 
-  // Card
   card: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -289,8 +368,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-
-  // Card top row
   cardTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -303,15 +380,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  sttText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#888",
-  },
+  sttText: { fontSize: 15, fontWeight: "700", color: "#888" },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: GREEN_BG,
+    backgroundColor: "#fff8e1",
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -321,30 +394,18 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: GREEN,
+    backgroundColor: "#f57f17",
   },
-  statusText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: GREEN,
-  },
+  statusText: { fontSize: 15, fontWeight: "600", color: "#f57f17" },
 
-  // Mã + ngày
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 10,
   },
-  maSo: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
-  ngay: {
-    fontSize: 15,
-    color: "#999",
-  },
+  maSo: { fontSize: 15, fontWeight: "700", color: "#1A1A1A" },
+  ngay: { fontSize: 13, color: "#999" },
 
   separator: {
     height: StyleSheet.hairlineWidth,
@@ -352,18 +413,13 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
 
-  // Info rows
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 4,
   },
-  infoLabel: {
-    fontSize: 15,
-    color: "#888",
-    flex: 1,
-  },
+  infoLabel: { fontSize: 15, color: "#888", flex: 1 },
   infoValue: {
     fontSize: 15,
     fontWeight: "500",
@@ -372,42 +428,60 @@ const styles = StyleSheet.create({
     flex: 2,
   },
 
-  // SL badge
+  // Món
+  monRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 7,
+  },
+  monTen: {
+    fontSize: 14,
+    color: "#1A1A1A",
+    fontWeight: "500",
+    flex: 1,
+    paddingRight: 8,
+  },
+  monRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  monGia: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEAL,
+    minWidth: 70,
+    textAlign: "right",
+  },
+  monDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#F0F0F0",
+  },
+  noMon: {
+    fontSize: 13,
+    color: "#999",
+    textAlign: "center",
+    paddingVertical: 8,
+  },
+
   soLuongBadge: {
     backgroundColor: TEAL_BG,
     borderRadius: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  soLuongText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: TEAL,
-  },
+  soLuongText: { fontSize: 13, fontWeight: "700", color: TEAL },
 
-  // Thành tiền
   tienRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 2,
   },
-  tienLabel: {
-    fontSize: 15,
-    color: "#888",
-    fontWeight: "500",
-  },
-  tienValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: TEAL,
-  },
+  tienLabel: { fontSize: 15, color: "#888", fontWeight: "500" },
+  tienValue: { fontSize: 16, fontWeight: "700", color: TEAL },
 
-  // Empty
-  empty: {
-    alignItems: "center",
-    paddingTop: 100,
-  },
   emptyIcon: { fontSize: 52, marginBottom: 14 },
   emptyTitle: {
     fontSize: 16,
@@ -416,6 +490,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptySub: { fontSize: 13, color: "#999" },
+  // Thêm style
+  listContentEmpty: { flexGrow: 1 },
+
+  empty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center", // ← căn giữa dọc
+    paddingTop: 0, // ← bỏ paddingTop cũ
+  },
 });
 
 export default ListOfDishesAlreadyServed;

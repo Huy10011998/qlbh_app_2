@@ -34,7 +34,6 @@ import { subscribeAppRefetch } from "../../utils/AppRefetchBus";
 import { log } from "../../utils/Logger";
 
 // ====================== API ======================
-// ====================== API ======================
 const fetchSoQuy = async (from: Date, to: Date): Promise<Transaction[]> => {
   try {
     // Đảm bảo from = đầu ngày, to = cuối ngày — bất kể giờ được truyền vào

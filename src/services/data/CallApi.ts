@@ -401,3 +401,91 @@ export const sendFCMActiveStatus = async (
     warn("[API] updateFCMToken failed", e);
   }
 };
+
+// ─── Đặt hàng cà phê ──────────────────────────────────────────────────────────
+const buildDatHangCaPheBody = (trangthai: number) => {
+  const now = new Date();
+
+  // Lấy ngày hiện tại theo giờ VN (UTC+7)
+  const vnOffsetMs = 7 * 60 * 60 * 1000;
+  const vnNow = new Date(now.getTime() + vnOffsetMs);
+
+  // yyyy-MM-dd theo VN
+  const yyyy = vnNow.getUTCFullYear();
+  const mm = vnNow.getUTCMonth();
+  const dd = vnNow.getUTCDate();
+
+  // 00:00:00 VN = 17:00:00 UTC ngày hôm trước
+  const startOfDayVN = new Date(Date.UTC(yyyy, mm, dd) - vnOffsetMs); // 2026-04-23T17:00:00.000Z
+  // 00:00:00 VN ngày kế = 17:00:00 UTC ngày hiện tại
+  const endOfDayVN = new Date(Date.UTC(yyyy, mm, dd + 1) - vnOffsetMs); // 2026-04-24T17:00:00.000Z
+
+  return {
+    orderby: null,
+    pageSize: null,
+    skipSize: null,
+    conditions: [
+      {
+        property: "NgayDatHang",
+        operator: 2,
+        value: startOfDayVN.toISOString(), // "2026-04-23T17:00:00.000Z"
+        type: 7,
+      },
+      {
+        property: "NgayDatHang",
+        operator: 5,
+        value: endOfDayVN.toISOString(), // "2026-04-24T17:00:00.000Z"
+        type: 7,
+      },
+      {
+        property: "ID_TrangThaiPhucVu",
+        operator: 0,
+        value: trangthai,
+        type: 2,
+      },
+    ],
+    searchText: null,
+    conditionsAll: [],
+  };
+};
+
+export const danhSachDatHangCaPhe = async <T = any>(trangthai: number) =>
+  callApi<T>(
+    "POST",
+    API_ENDPOINTS.DANH_SACH_DAT_HANG_CA_PHE,
+    buildDatHangCaPheBody(trangthai),
+  );
+
+// ─── Đặt hàng cà phê chi tiết ──────────────────────────────────────────────────────────
+const buildDatHangCaPheChiTietBody = (ids: number[]) => ({
+  orderby: null,
+  pageSize: null,
+  skipSize: null,
+  conditions: [
+    {
+      property: "ID_DatHang_BanCaPhe",
+      operator: 10,
+      value: ids,
+      type: 11,
+    },
+  ],
+  searchText: null,
+  conditionsAll: [],
+});
+
+export const danhSachDatHangCaPheChiTiet = async <T = any>(ids: number[]) =>
+  callApi<T>(
+    "POST",
+    API_ENDPOINTS.CHI_TIET_DAT_HANG_CA_PHE,
+    buildDatHangCaPheChiTietBody(ids),
+  );
+
+// ─── Cập nhật trạng thái phục vụ ──────────────────────────────────────────────────────────
+export const updateTrangThaiPhucVu = async <T = any>(
+  ids: number[],
+  iD_TrangThaiPhucVu: number,
+) =>
+  callApi<T>("POST", API_ENDPOINTS.UPDATE_TRANG_THAI_PHUC_VU, {
+    iDs: ids.join(","),
+    iD_TrangThaiPhucVu,
+  });

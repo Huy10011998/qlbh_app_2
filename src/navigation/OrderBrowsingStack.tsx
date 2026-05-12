@@ -9,7 +9,7 @@ export default function OrderBrowsingStack() {
   return (
     <Stack.Navigator>
       <Stack.Screen
-        name="Setting"
+        name="OrderBrowsing"
         component={OrderBrowsingScreen}
         options={{
           title: "Duyệt đơn hàng",

@@ -29,6 +29,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 // import { useAppDispatch } from "../../store/Hooks";
 import LinearGradient from "react-native-linear-gradient";
+import { requestNotificationPermission } from "../../firebase/NotificationPermission";
 
 export default function LoginScreen() {
   const { setToken, setRefreshToken, setIosAuthenticated, token } = useAuth();
@@ -84,6 +85,7 @@ export default function LoginScreen() {
           typeof loginUserId === "string" ? Number(loginUserId) : loginUserId,
         );
 
+        await requestNotificationPermission();
         await sendFCMActiveStatus(true, loginUserId ?? null);
 
         // Lưu lại login thường (không phải FaceID)
@@ -193,6 +195,7 @@ export default function LoginScreen() {
           typeof loginUserId === "string" ? Number(loginUserId) : loginUserId,
         );
 
+        await requestNotificationPermission();
         await sendFCMActiveStatus(true, loginUserId ?? null);
 
         // const permissionRes = await getPermission();

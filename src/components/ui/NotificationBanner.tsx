@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export type NotificationBannerProps = {
@@ -12,6 +12,15 @@ const NotificationBanner: React.FC<NotificationBannerProps> = ({
   body,
   onClose,
 }) => {
+  const [time, setTime] = useState("");
+
+  useEffect(() => {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, "0");
+    const minutes = now.getMinutes().toString().padStart(2, "0");
+    setTime(`${hours}:${minutes}`);
+  }, []);
+
   return (
     <TouchableOpacity
       style={styles.wrapper}
@@ -24,9 +33,12 @@ const NotificationBanner: React.FC<NotificationBannerProps> = ({
           style={styles.logo}
         />
         <View style={styles.textBlock}>
-          <Text numberOfLines={1} style={styles.title}>
-            {title || "Thông báo"}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text numberOfLines={1} style={styles.title}>
+              {title || "Thông báo"}
+            </Text>
+            <Text style={styles.time}>{time}</Text>
+          </View>
           <Text numberOfLines={2} style={styles.body}>
             {body || "Bạn có một thông báo mới."}
           </Text>
@@ -65,11 +77,22 @@ const styles = StyleSheet.create({
   textBlock: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
   title: {
     fontSize: 15,
     fontWeight: "700",
     color: "#0F4D3A",
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 8,
+  },
+  time: {
+    fontSize: 12,
+    color: "#999",
   },
   body: {
     fontSize: 13,

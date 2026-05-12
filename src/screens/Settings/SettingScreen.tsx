@@ -21,6 +21,10 @@ import IsLoading from "../../components/ui/IconLoading";
 import { API_ENDPOINTS } from "../../config/Index";
 import { StackNavigation, UserInfo } from "../../types";
 import { callApi } from "../../services/data/CallApi";
+import {
+  isNotificationPermissionEnabled,
+  openNotificationPermissionSettings,
+} from "../../firebase/NotificationPermission";
 // import ReactNativeBiometrics from "react-native-biometrics";
 // import AsyncStorage from "@react-native-async-storage/async-storage";
 // import { clearPermissions } from "../../store/PermissionSlice";
@@ -47,13 +51,20 @@ const SettingHeader: React.FC<{ name?: string; avatarUrl?: string }> = ({
 const SettingItem: React.FC<{
   iconName: string;
   label: string;
+  valueText?: string;
+  valueColor?: string;
   onPress: () => void;
-}> = ({ iconName, label, onPress }) => (
+}> = ({ iconName, label, valueText, valueColor, onPress }) => (
   <TouchableOpacity style={styles.settingItem} onPress={onPress}>
     <View style={styles.iconWrapper}>
       <Ionicons name={iconName} size={22} color="#fff" />
     </View>
     <Text style={styles.label}>{label}</Text>
+    {valueText ? (
+      <Text style={[styles.valueText, valueColor ? { color: valueColor } : null]}>
+        {valueText}
+      </Text>
+    ) : null}
     <Ionicons name="chevron-forward" size={20} color="#999" />
   </TouchableOpacity>
 );
@@ -85,6 +96,9 @@ const SettingScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [isFaceIdEnabled, setIsFaceIdEnabled] = useState(false);
+  const [notificationEnabled, setNotificationEnabled] = useState<
+    boolean | null
+  >(null);
 
   const navigation = useNavigation<StackNavigation<"Profile">>();
   const { logout } = useAuth();
@@ -128,12 +142,18 @@ const SettingScreen = () => {
     }
   }, []);
 
+  const refreshNotificationStatus = React.useCallback(async () => {
+    const enabled = await isNotificationPermissionEnabled();
+    setNotificationEnabled(enabled);
+  }, []);
+
   // AUTO RELOAD ON FOCUS
   useFocusEffect(
     React.useCallback(() => {
       fetchData();
+      refreshNotificationStatus();
       return () => {};
-    }, [fetchData]),
+    }, [fetchData, refreshNotificationStatus]),
   );
 
   // useAutoReload(fetchData);
@@ -206,6 +226,25 @@ const SettingScreen = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handlePressNotificationSettings = () => {
+    if (notificationEnabled === false) {
+      Alert.alert(
+        "Thông báo đang tắt",
+        "Bạn cần bật thông báo trong cài đặt điện thoại để nhận cảnh báo đơn hàng.",
+        [
+          { text: "Để sau", style: "cancel" },
+          {
+            text: "Mở cài đặt",
+            onPress: openNotificationPermissionSettings,
+          },
+        ],
+      );
+      return;
+    }
+
+    openNotificationPermissionSettings();
   };
 
   // CHANGE PASSWORD
@@ -294,6 +333,20 @@ const SettingScreen = () => {
             iconName="lock-closed-outline"
             label="Đổi mật khẩu / Change Password"
             onPress={() => setIsModalVisible(true)}
+          />
+
+          <SettingItem
+            iconName="notifications-outline"
+            label="Thông báo / Notifications"
+            valueText={
+              notificationEnabled === null
+                ? "Đang kiểm tra"
+                : notificationEnabled
+                ? "Đang bật"
+                : "Đang tắt"
+            }
+            valueColor={notificationEnabled === false ? "#C62828" : "#0F4D3A"}
+            onPress={handlePressNotificationSettings}
           />
 
           {/* {Platform.OS === "ios" && (
@@ -427,6 +480,12 @@ const styles = StyleSheet.create({
   },
 
   label: { flex: 1, fontSize: 15, fontWeight: "bold", color: "#333" },
+
+  valueText: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginRight: 8,
+  },
 
   modalOverlay: {
     flex: 1,

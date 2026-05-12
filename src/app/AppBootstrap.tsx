@@ -1,17 +1,21 @@
-// AppBootstrap.tsx
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import messaging, {
   FirebaseMessagingTypes,
 } from "@react-native-firebase/messaging";
-import notifee, { AndroidImportance } from "@notifee/react-native";
+import notifee, { AndroidImportance, EventType } from "@notifee/react-native";
 import { log } from "../utils/Logger";
 import { useAuth } from "../context/AuthContext";
 import { emitAppRefetch } from "../utils/AppRefetchBus";
 import NotificationBanner from "../components/ui/NotificationBanner";
-
-const CHANNEL_ID = "default_high";
+import {
+  flushPendingNavigation,
+  navigateByType,
+} from "../navigation/NavigationRef";
+import { requestNotificationPermission } from "../firebase/NotificationPermission";
+import { FOREGROUND_TRAY_CHANNEL_ID } from "../firebase/BackgroundMessaging";
+import { syncBadgeCountWithTray } from "../firebase/NotificationBadge";
 
 export default function AppBootstrap() {
   const { isAuthenticated, authReady } = useAuth() as {
@@ -22,11 +26,21 @@ export default function AppBootstrap() {
   const [notification, setNotification] = useState<{
     title?: string;
     body?: string;
+    type?: string;
   } | null>(null);
+
+  const currentNotificationRef = useRef<{
+    title?: string;
+    body?: string;
+    type?: string;
+  } | null>(null);
+
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const isFirstForeground = useRef(true);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shouldSaveToTray = useRef(true);
 
+  // AppState + NetInfo
   useEffect(() => {
     const appStateSubscription = AppState.addEventListener(
       "change",
@@ -36,6 +50,9 @@ export default function AppBootstrap() {
           nextState === "active"
         ) {
           log("[APP] Returned to foreground");
+
+          flushPendingNavigation();
+          syncBadgeCountWithTray();
 
           if (isFirstForeground.current) {
             isFirstForeground.current = false;
@@ -54,7 +71,7 @@ export default function AppBootstrap() {
 
     const netInfoSubscription = NetInfo.addEventListener((state) => {
       if (state.isConnected && state.isInternetReachable !== false) {
-        log("[NET] Back online → refetch data");
+        log("[NET] Back online → refetch");
         emitAppRefetch("network");
       } else {
         log("[NET] Offline");
@@ -67,10 +84,8 @@ export default function AppBootstrap() {
     };
   }, [isAuthenticated, authReady]);
 
-  useEffect(() => {
-    const showNotification = (
-      remoteMessage: FirebaseMessagingTypes.RemoteMessage,
-    ) => {
+  const showNotification = useCallback(
+    (remoteMessage: FirebaseMessagingTypes.RemoteMessage) => {
       const title =
         typeof remoteMessage.notification?.title === "string"
           ? remoteMessage.notification.title
@@ -83,70 +98,101 @@ export default function AppBootstrap() {
           : typeof remoteMessage.data?.body === "string"
           ? remoteMessage.data.body
           : undefined;
+      const type =
+        typeof remoteMessage.data?.type === "string"
+          ? remoteMessage.data.type
+          : undefined;
+      const orderId =
+        typeof remoteMessage.data?.orderId === "string"
+          ? remoteMessage.data.orderId
+          : undefined;
 
       if (!title && !body) return;
 
-      setNotification({ title, body });
+      currentNotificationRef.current = { title, body, type };
+      shouldSaveToTray.current = true;
+      setNotification({ title, body, type });
+      emitAppRefetch("notification");
 
-      if (dismissTimer.current) {
-        clearTimeout(dismissTimer.current);
-      }
+      if (dismissTimer.current) clearTimeout(dismissTimer.current);
 
       dismissTimer.current = setTimeout(async () => {
         setNotification(null);
+        currentNotificationRef.current = null; // ← clear ref sau khi dismiss
+        if (!shouldSaveToTray.current) return;
 
-        // Sau khi banner tự dismiss → lưu vào tray thiết bị
         try {
           await notifee.displayNotification({
             title,
             body,
+            data: { type: type ?? "", orderId: orderId ?? "" },
             android: {
-              channelId: CHANNEL_ID,
-              importance: AndroidImportance.DEFAULT, // không heads-up lại, chỉ lưu tray
+              channelId: FOREGROUND_TRAY_CHANNEL_ID,
+              importance: AndroidImportance.LOW,
               pressAction: { id: "default" },
+              smallIcon: "ic_launcher",
+              timestamp: Date.now(),
+              showTimestamp: true,
             },
           });
+          await syncBadgeCountWithTray();
         } catch (error) {
-          log("[Notifee] Failed to save notification to tray", error);
+          log("[Notifee] Failed to save to tray", error);
         }
       }, 5000);
-    };
+    },
+    [],
+  );
 
-    const unsubscribe = messaging().onMessage(async (remoteMessage) => {
-      log("[FCM] Foreground message received", remoteMessage);
+  // Xin quyền notification sau khi đã có phiên đăng nhập
+  useEffect(() => {
+    if (!authReady || !isAuthenticated) return;
+
+    requestNotificationPermission();
+  }, [authReady, isAuthenticated]);
+
+  // FCM foreground + Notifee foreground event
+  useEffect(() => {
+    const unsubscribeFCM = messaging().onMessage(async (remoteMessage) => {
+      log("[FCM] Foreground message", remoteMessage);
       showNotification(remoteMessage);
     });
 
+    const unsubscribeNotifee = notifee.onForegroundEvent(({ type, detail }) => {
+      if (type === EventType.PRESS) {
+        const notifType = detail.notification?.data?.type as string | undefined;
+        log("[Notifee] foreground press, type:", notifType);
+        flushPendingNavigation();
+        if (notifType) navigateByType(notifType);
+      }
+
+      if (type === EventType.APP_BLOCKED || type === EventType.DISMISSED) {
+        flushPendingNavigation();
+      }
+
+      if (type === EventType.PRESS || type === EventType.DISMISSED) {
+        syncBadgeCountWithTray();
+      }
+    });
+
     return () => {
-      unsubscribe();
-      if (dismissTimer.current) {
-        clearTimeout(dismissTimer.current);
-      }
+      unsubscribeFCM();
+      unsubscribeNotifee();
+      if (dismissTimer.current) clearTimeout(dismissTimer.current);
     };
-  }, []);
-
-  useEffect(() => {
-    const requestPermission = async () => {
-      try {
-        const authStatus = await messaging().requestPermission();
-        const enabled =
-          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-        log("[FCM] permission status", authStatus, enabled);
-      } catch (error) {
-        log("[FCM] permission request failed", error);
-      }
-    };
-
-    requestPermission();
-  }, []);
+  }, [showNotification]);
 
   return notification ? (
     <NotificationBanner
       title={notification.title}
       body={notification.body}
-      onClose={() => setNotification(null)}
+      onClose={() => {
+        shouldSaveToTray.current = false;
+        const type = currentNotificationRef.current?.type;
+        currentNotificationRef.current = null;
+        setNotification(null);
+        if (type) navigateByType(type);
+      }}
     />
   ) : null;
 }
