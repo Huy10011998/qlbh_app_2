@@ -9,10 +9,7 @@ import {
   Image,
   Modal,
   TextInput,
-  Switch,
-  Platform,
 } from "react-native";
-import * as Keychain from "react-native-keychain";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useAuth } from "../../context/AuthContext";
@@ -25,6 +22,7 @@ import {
   isNotificationPermissionEnabled,
   openNotificationPermissionSettings,
 } from "../../firebase/NotificationPermission";
+import { colors } from "../../constants/theme";
 // import ReactNativeBiometrics from "react-native-biometrics";
 // import AsyncStorage from "@react-native-async-storage/async-storage";
 // import { clearPermissions } from "../../store/PermissionSlice";
@@ -41,7 +39,11 @@ const SettingHeader: React.FC<{ name?: string; avatarUrl?: string }> = ({
       {avatarUrl ? (
         <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
       ) : (
-        <Ionicons name="person-circle-outline" size={60} color="#0F4D3A" />
+        <Ionicons
+          name="person-circle-outline"
+          size={60}
+          color={colors.brandGreen}
+        />
       )}
     </View>
     <Text style={styles.name}>{name || "---"}</Text>
@@ -69,21 +71,6 @@ const SettingItem: React.FC<{
   </TouchableOpacity>
 );
 // ITEM SWITC
-const SettingSwitchItem: React.FC<{
-  iconName: string;
-  label: string;
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-}> = ({ iconName, label, value, onValueChange }) => (
-  <View style={styles.settingItem}>
-    <View style={styles.iconWrapper}>
-      <Ionicons name={iconName} size={22} color="#fff" />
-    </View>
-    <Text style={styles.label}>{label}</Text>
-    <Switch value={value} onValueChange={onValueChange} />
-  </View>
-);
-
 const SettingScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<UserInfo>();
@@ -95,7 +82,7 @@ const SettingScreen = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [isFaceIdEnabled, setIsFaceIdEnabled] = useState(false);
+  const [, setIsFaceIdEnabled] = useState(false);
   const [notificationEnabled, setNotificationEnabled] = useState<
     boolean | null
   >(null);
@@ -313,12 +300,12 @@ const SettingScreen = () => {
   // };
 
   if (isLoading || (!user && !hasLoadedOnce)) {
-    return <IsLoading size="large" color="#0F4D3A" />;
+    return <IsLoading size="large" color={colors.brandGreen} />;
   }
 
   // UI RENDER
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.root}>
       <ScrollView style={styles.container}>
         <SettingHeader name={user?.moTa} avatarUrl={user?.avatarUrl} />
 
@@ -345,7 +332,9 @@ const SettingScreen = () => {
                 ? "Đang bật"
                 : "Đang tắt"
             }
-            valueColor={notificationEnabled === false ? "#C62828" : "#0F4D3A"}
+            valueColor={
+              notificationEnabled === false ? "#C62828" : colors.brandGreen
+            }
             onPress={handlePressNotificationSettings}
           />
 
@@ -439,6 +428,7 @@ const SettingScreen = () => {
 };
 // STYLE
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   container: { flex: 1, backgroundColor: "#fff" },
   profileHeader: {
     alignItems: "center",
@@ -473,7 +463,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#0F4D3A",
+    backgroundColor: colors.brandGreen,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -534,7 +524,7 @@ const styles = StyleSheet.create({
   },
 
   cancelButton: { backgroundColor: "#ccc" },
-  confirmButton: { backgroundColor: "#0F4D3A" },
+  confirmButton: { backgroundColor: colors.brandGreen },
   buttonText: { color: "#fff", fontWeight: "bold" },
 });
 

@@ -1,7 +1,6 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { HeaderDetails } from "../components/header/HeaderDetails";
-import OrderBrowsingScreen from "../screens/Order/OrderBrowsingScreen";
 import ListOfDishesAlreadyServed from "../screens/ListOfDishesAlreadyServed/ListOfDishesAlreadyServedScreen";
 
 const Stack = createNativeStackNavigator();

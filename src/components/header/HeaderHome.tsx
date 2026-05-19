@@ -12,6 +12,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LinearGradient from "react-native-linear-gradient";
 import { StackNavigation } from "../../types/Navigator.d";
+import { colors } from "../../constants/theme";
 
 export default function HeaderHome() {
   const navigation = useNavigation<StackNavigation<"Tabs">>();
@@ -25,9 +26,16 @@ export default function HeaderHome() {
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#0A3D2E" />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={colors.brandGreenDark}
+      />
       <LinearGradient
-        colors={["#0A3D2E", "#0F4D3A", "#186249"]}
+        colors={[
+          colors.brandGreenDark,
+          colors.brandGreen,
+          colors.brandGreenLight,
+        ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.headerContainer, { paddingTop: insets.top + 10 }]}
@@ -60,7 +68,7 @@ export default function HeaderHome() {
             activeOpacity={0.75}
           >
             <View style={styles.iconInner}>
-              <Ionicons name="home" size={20} color="#0F4D3A" />
+              <Ionicons name="home" size={20} color={colors.brandGreen} />
             </View>
           </TouchableOpacity>
         </View>

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Animated,
-  FlatList,
-  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
+  StyleProp,
   Text,
+  ViewStyle,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -30,8 +30,9 @@ import {
   toLocalISOString,
 } from "../../utils/Helper";
 import { ListItem, ViewMode } from "../../types";
-import { subscribeAppRefetch } from "../../utils/AppRefetchBus";
-import { log } from "../../utils/Logger";
+import { useAppRefetch } from "../../hooks/useAppRefetch";
+import { log, warn } from "../../utils/Logger";
+import { colors } from "../../constants/theme";
 
 // ====================== API ======================
 const fetchSoQuy = async (from: Date, to: Date): Promise<Transaction[]> => {
@@ -49,7 +50,21 @@ const fetchSoQuy = async (from: Date, to: Date): Promise<Transaction[]> => {
     );
     const raw: ApiItem[] = json.data ?? [];
 
-    return raw.map((item, idx) => {
+    log("[CashBook] fetchSoQuy:api-response", {
+      from: toLocalISOString(fromStart),
+      to: toLocalISOString(toEnd),
+      rawCount: raw.length,
+      sample: raw.slice(0, 5).map((item, idx) => ({
+        idx,
+        text: item.text,
+        loai: item.loai,
+        loaiThuChi: item.loaiThuChi,
+        ngay: item.ngay,
+        tongTien: item.tongTien,
+      })),
+    });
+
+    const mapped = raw.map((item, idx) => {
       const isThu = item.loaiThuChi?.toLowerCase().trim() === "thu";
       const type: "thu" | "chi" = isThu ? "thu" : "chi";
 
@@ -63,8 +78,22 @@ const fetchSoQuy = async (from: Date, to: Date): Promise<Transaction[]> => {
         amount: item.tongTien || 0,
       };
     });
+
+    log("[CashBook] fetchSoQuy:mapped-transactions", {
+      count: mapped.length,
+      sample: mapped.slice(0, 5).map((item) => ({
+        id: item.id,
+        type: item.type,
+        category: item.category,
+        name: item.name,
+        date: item.date,
+        amount: item.amount,
+      })),
+    });
+
+    return mapped;
   } catch (error) {
-    console.error("fetchSoQuy error:", error);
+    warn("fetchSoQuy error:", error);
     return [];
   }
 };
@@ -127,9 +156,9 @@ const buildListByCategory = (data: Transaction[]): ListItem[] => {
 
 // ====================== COMPONENTS ======================
 const SkeletonBox: React.FC<{
-  width: number | string;
+  width: number | `${number}%`;
   height: number;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
 }> = ({ width, height, style }) => {
   const anim = React.useRef(new Animated.Value(0.3)).current;
   React.useEffect(() => {
@@ -147,7 +176,7 @@ const SkeletonBox: React.FC<{
         }),
       ]),
     ).start();
-  }, []);
+  }, [anim]);
   return (
     <Animated.View
       style={[
@@ -168,9 +197,7 @@ const CategoryHeader = React.memo<{
     onPress={onToggle}
     activeOpacity={0.8}
   >
-    <View
-      style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}
-    >
+    <View style={styles.categoryHeaderLeft}>
       <Ionicons
         name={isExpanded ? "chevron-down" : "chevron-forward"}
         size={20}
@@ -178,7 +205,7 @@ const CategoryHeader = React.memo<{
       />
       <Text style={styles.categoryName}>{item.category}</Text>
     </View>
-    <View style={{ alignItems: "flex-end" }}>
+    <View style={styles.categoryHeaderRight}>
       <Text style={styles.categoryCount}>{item.count} dòng</Text>
       <Text
         style={[
@@ -317,11 +344,9 @@ const CashBookScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
   const [from, to] = useMemo(
     () => getDateRange(quickFilter, fromDate, toDate),
-    [quickFilter, fromDate.getTime(), toDate.getTime()],
+    [quickFilter, fromDate, toDate],
   );
 
   const subtitle = useMemo(
@@ -331,42 +356,49 @@ const CashBookScreen: React.FC = () => {
 
   const loadData = useCallback(
     async (isRefresh = false) => {
+      log("[CashBook] loadData:start", {
+        isRefresh,
+        quickFilter,
+        typeFilter,
+        viewMode,
+        from: toLocalISOString(from),
+        to: toLocalISOString(to),
+      });
       isRefresh ? setRefreshing(true) : setLoading(true);
-      setError(null);
       try {
         const data = await fetchSoQuy(from, to);
+        log("[CashBook] loadData:setTransactions", {
+          count: data.length,
+          sample: data.slice(0, 5).map((item) => ({
+            id: item.id,
+            type: item.type,
+            category: item.category,
+            name: item.name,
+            amount: item.amount,
+          })),
+        });
         setTransactions(data);
         setExpandedCategories(new Set());
-      } catch (e) {
-        setError("Không thể tải dữ liệu. Vui lòng thử lại.");
+      } catch {
         setTransactions([]);
       } finally {
+        log("[CashBook] loadData:finish");
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [from, to],
+    [from, quickFilter, to, typeFilter, viewMode],
   );
 
-  // ==================== AUTO REFETCH HOOK ====================
-  useEffect(() => {
-    const unsubscribe = subscribeAppRefetch((source) => {
-      log(`[CashBookScreen] Refetch triggered by: ${source}`);
-      loadData(true); // Tự động refresh khi có mạng hoặc foreground
-    });
-
-    // Cleanup function
-    return () => {
-      unsubscribe();
-    };
-  }, [loadData]);
-  // ===========================================================
+  useAppRefetch(
+    useCallback(() => {
+      loadData(true);
+    }, [loadData]),
+  );
 
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  console.log("=quickFilter", quickFilter);
 
   const filtered = useMemo(() => {
     if (typeFilter === "all") return transactions;
@@ -390,6 +422,57 @@ const CashBookScreen: React.FC = () => {
       ? buildListByDate(filtered)
       : buildListByCategory(filtered);
   }, [filtered, viewMode]);
+
+  useEffect(() => {
+    log("[CashBook] state:transactions", {
+      count: transactions.length,
+      sample: transactions.slice(0, 5).map((item) => ({
+        id: item.id,
+        type: item.type,
+        category: item.category,
+        name: item.name,
+        amount: item.amount,
+      })),
+    });
+  }, [transactions]);
+
+  useEffect(() => {
+    log("[CashBook] state:listData", {
+      viewMode,
+      typeFilter,
+      filteredCount: filtered.length,
+      listCount: listData.length,
+      sample: listData.slice(0, 8).map((item) => {
+        if (item.kind === "dateHeader") {
+          return {
+            kind: item.kind,
+            date: item.date,
+            thu: item.thu,
+            chi: item.chi,
+          };
+        }
+
+        if (item.kind === "categoryHeader") {
+          return {
+            kind: item.kind,
+            category: item.category,
+            count: item.count,
+            amount: item.amount,
+            type: item.type,
+            childCount: item.children?.length ?? 0,
+          };
+        }
+
+        return {
+          kind: item.kind,
+          id: item.data.id,
+          category: item.data.category,
+          name: item.data.name,
+          amount: item.data.amount,
+        };
+      }),
+    });
+  }, [filtered.length, listData, typeFilter, transactions.length, viewMode]);
 
   const countThu = useMemo(
     () => transactions.filter((t) => t.type === "thu").length,
@@ -420,7 +503,7 @@ const CashBookScreen: React.FC = () => {
 
   return (
     <View style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F4D3A" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.brandGreen} />
 
       {/* HEADER */}
       <View style={[styles.header, { paddingTop: insets.top + 13 }]}>
@@ -562,7 +645,7 @@ const CashBookScreen: React.FC = () => {
           label="Tất cả"
           value="all"
           current={typeFilter}
-          color="#0F4D3A"
+          color={colors.brandGreen}
           count={transactions.length}
           onPress={setTypeFilter}
         />
@@ -622,7 +705,7 @@ const CashBookScreen: React.FC = () => {
       {loading && !refreshing ? (
         <ScrollView style={styles.list} scrollEnabled={false}>
           {[1, 2, 3].map((i) => (
-            <View key={i} style={{ padding: 16 }}>
+            <View key={i} style={styles.skeletonRow}>
               <SkeletonBox width="80%" height={18} />
             </View>
           ))}
@@ -630,17 +713,12 @@ const CashBookScreen: React.FC = () => {
       ) : isEmpty ? (
         <EmptyState />
       ) : (
-        <FlatList
-          data={listData}
-          keyExtractor={(item, idx) =>
-            item.kind === "dateHeader"
-              ? `d-${item.date}`
-              : `c-${(item as any).category}-${idx}`
-          }
-          renderItem={({ item }) => {
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+          {listData.map((item, index) => {
             if (item.kind === "dateHeader") {
               return (
                 <DateGroupHeader
+                  key={`d-${item.date}-${index}`}
                   date={item.date}
                   thu={item.thu}
                   chi={item.chi}
@@ -651,35 +729,28 @@ const CashBookScreen: React.FC = () => {
             if (item.kind === "categoryHeader") {
               const isExpanded = expandedCategories.has(item.category);
               return (
-                <>
+                <View key={`c-${item.category}-${index}`}>
                   <CategoryHeader
                     item={item}
                     isExpanded={isExpanded}
                     onToggle={() => toggleCategory(item.category)}
                   />
                   {isExpanded &&
-                    item.children?.map((child: Transaction, index: number) => (
-                      <TransactionRow key={index} item={child} />
+                    item.children?.map((child: Transaction) => (
+                      <TransactionRow key={`r-${child.id}`} item={child} />
                     ))}
-                </>
+                </View>
               );
             }
 
-            if (item.kind === "row") {
-              return <TransactionRow item={item.data} />;
-            }
-            return null;
-          }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => loadData(true)}
-              tintColor="#0F4D3A"
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          style={styles.list}
-        />
+            return (
+              <TransactionRow
+                key={`r-${item.data.id}-${index}`}
+                item={item.data}
+              />
+            );
+          })}
+        </ScrollView>
       )}
 
       {/* FOOTER */}
@@ -704,10 +775,10 @@ const CashBookScreen: React.FC = () => {
 
 // ====================== STYLES ======================
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F4F4F4" },
+  safe: { flex: 1, backgroundColor: colors.screen },
 
   header: {
-    backgroundColor: "#0F4D3A",
+    backgroundColor: colors.brandGreen,
     paddingHorizontal: 16,
     paddingBottom: 13,
     flexDirection: "row",
@@ -740,7 +811,10 @@ const styles = StyleSheet.create({
     borderColor: "#C8C8C8",
     backgroundColor: "#fff",
   },
-  chipActive: { backgroundColor: "#0F4D3A", borderColor: "#0F4D3A" },
+  chipActive: {
+    backgroundColor: colors.brandGreen,
+    borderColor: colors.brandGreen,
+  },
   chipText: { fontSize: 15, color: "#555" },
   chipTextActive: { color: "#fff", fontWeight: "500" },
 
@@ -814,11 +888,15 @@ const styles = StyleSheet.create({
   tabBadgeText: { fontSize: 15, fontWeight: "600" },
 
   viewModeTab: { flex: 1, paddingVertical: 12, alignItems: "center" },
-  viewModeTabActive: { borderBottomWidth: 2, borderBottomColor: "#0F4D3A" },
+  viewModeTabActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: colors.brandGreen,
+  },
   viewModeText: { fontSize: 15, color: "#888" },
-  viewModeTextActive: { color: "#0F4D3A", fontWeight: "600" },
+  viewModeTextActive: { color: colors.brandGreen, fontWeight: "600" },
 
   list: { flex: 1 },
+  skeletonRow: { padding: 16 },
 
   categoryHeader: {
     backgroundColor: "#fff",
@@ -830,6 +908,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: "#F0F0F0",
   },
+  categoryHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  categoryHeaderRight: { alignItems: "flex-end" },
   categoryName: { fontSize: 15.5, fontWeight: "600", color: "#1F2937" },
   categoryCount: { fontSize: 15, color: "#6B7280" },
   categoryAmount: { fontSize: 15.5, fontWeight: "700" },

@@ -1,4 +1,4 @@
-type RefetchSource = "network" | "foreground" | "notification";
+export type RefetchSource = "network" | "foreground" | "notification";
 type Listener = (source: RefetchSource) => void;
 
 const listeners = new Set<Listener>();

@@ -5,6 +5,7 @@ import { API_ENDPOINTS } from "../../config/Index";
 import { User } from "../../types/Index";
 import { callApi } from "../../services/data/CallApi";
 import { error } from "../../utils/Logger";
+import { colors } from "../../constants/theme";
 // import { useAutoReload } from "../../hooks/useAutoReload";
 
 const ProfileScreen: React.FC = () => {
@@ -43,7 +44,7 @@ const ProfileScreen: React.FC = () => {
   );
 
   if (isLoading || !user) {
-    return <IsLoading size="large" color="#0F4D3A" />;
+    return <IsLoading size="large" color={colors.brandGreen} />;
   }
 
   return (
@@ -87,7 +88,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 20,
-    backgroundColor: "#0F4D3A",
+    backgroundColor: colors.brandGreen,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -103,7 +104,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 36,
     fontWeight: "bold",
-    color: "#fff",
+    color: colors.white,
   },
 
   infoSection: {

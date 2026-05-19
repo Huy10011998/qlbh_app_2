@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { colors } from "../../constants/theme";
 
 export type NotificationBannerProps = {
   title?: string;
@@ -86,7 +87,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F4D3A",
+    color: colors.brandGreen,
     flex: 1,
     marginRight: 8,
   },

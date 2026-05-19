@@ -1,9 +1,13 @@
 export interface LoginResponse {
-  refreshToken: null;
-  accessToken: any;
+  refreshToken?: string | null;
+  accessToken?: string;
   data: {
     accessToken: string;
     refreshToken?: string;
+    iD_User?: number | string;
+    ID_User?: number | string;
+    userId?: number | string;
+    id?: number | string;
   };
 }
 

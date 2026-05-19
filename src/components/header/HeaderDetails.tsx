@@ -4,13 +4,14 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { useNavigation, NavigationProp } from "@react-navigation/native";
 import { NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { HeaderOptionsProps } from "../../types";
+import { colors } from "../../constants/theme";
 
 export const HeaderDetails = ({
   showBackButton,
 }: HeaderOptionsProps = {}): NativeStackNavigationOptions => {
   return {
-    headerStyle: { backgroundColor: "#0F4D3A" },
-    headerTintColor: "#fff",
+    headerStyle: { backgroundColor: colors.brandGreen },
+    headerTintColor: colors.white,
     headerTitleAlign: "center",
     headerTitleStyle: { fontWeight: "bold" },
     headerLeft: showBackButton ? () => <HeaderBackButton /> : undefined,
@@ -25,7 +26,7 @@ function HeaderBackButton() {
       onPress={() => navigation.goBack()}
       style={{ paddingHorizontal: 5 }}
     >
-      <Ionicons name="arrow-back" size={26} color="#fff" />
+      <Ionicons name="arrow-back" size={26} color={colors.white} />
     </TouchableOpacity>
   );
 }

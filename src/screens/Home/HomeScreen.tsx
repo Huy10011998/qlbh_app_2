@@ -6,9 +6,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import { StackNavigation } from "../../types";
+import { colors } from "../../constants/theme";
 
 type SubItem = {
   id: string;
@@ -30,18 +29,15 @@ type GroupItem = {
 };
 
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation<StackNavigation<"Tabs">>();
-
   const groups: GroupItem[] = [
     {
       id: "1",
       label: "Cà phê",
       description: "Quản lý kinh doanh cà phê",
       iconName: "cafe-outline",
-      color: "#0F4D3A",
+      color: colors.brandGreen,
       subColor: "#E1F5EE",
       subIconColor: "#0F6E56",
-      // onPress: () => navigation.navigate("Asset"),
       subItems: [
         { id: "1-1", label: "Hoá đơn", iconName: "receipt-outline" },
         { id: "1-2", label: "Sản phẩm", iconName: "shirt-outline" },

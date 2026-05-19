@@ -26,13 +26,48 @@ import {
   setStoredUserId,
   setTokenInApi,
 } from "../../services/data/CallApi";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 // import { useAppDispatch } from "../../store/Hooks";
 import LinearGradient from "react-native-linear-gradient";
 import { requestNotificationPermission } from "../../firebase/NotificationPermission";
+import { colors } from "../../constants/theme";
+import { warn } from "../../utils/Logger";
+
+type LoginResponseData = {
+  accessToken: string;
+  refreshToken?: string | null;
+  iD_User?: number | string;
+  ID_User?: number | string;
+  userId?: number | string;
+  id?: number | string;
+};
+
+const getLoginUserId = (data: LoginResponseData): number | null => {
+  const rawId = data.iD_User ?? data.ID_User ?? data.userId ?? data.id ?? null;
+  if (rawId == null) return null;
+
+  const parsed = typeof rawId === "string" ? Number(rawId) : rawId;
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const saveIosBiometricCredentials = async (
+  username: string,
+  password: string,
+) => {
+  if (Platform.OS !== "ios") return;
+
+  try {
+    await Keychain.setGenericPassword(username, password, {
+      service: "auth-login",
+      accessible: Keychain.ACCESSIBLE.WHEN_PASSCODE_SET_THIS_DEVICE_ONLY,
+      accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET,
+    });
+  } catch (error) {
+    warn("[Auth] Save iOS biometric credentials failed", error);
+  }
+};
 
 export default function LoginScreen() {
-  const { setToken, setRefreshToken, setIosAuthenticated, token } = useAuth();
+  const { setToken, setRefreshToken, setIosAuthenticated } = useAuth();
 
   const [userName, setUserName] = useState("");
   const [userPassword, setUserPassword] = useState("");
@@ -66,7 +101,7 @@ export default function LoginScreen() {
       const res = await loginApi(userName, userPassword);
 
       if (res?.data?.accessToken) {
-        const loginResponseData = res.data as any;
+        const loginResponseData = res.data;
 
         await setToken(loginResponseData.accessToken);
         await setRefreshToken(loginResponseData.refreshToken ?? null);
@@ -74,26 +109,14 @@ export default function LoginScreen() {
         setTokenInApi(loginResponseData.accessToken);
         setRefreshInApi(loginResponseData.refreshToken ?? null);
 
-        const loginUserId =
-          loginResponseData?.iD_User ??
-          loginResponseData?.ID_User ??
-          loginResponseData?.userId ??
-          loginResponseData?.id ??
-          null;
+        const loginUserId = getLoginUserId(loginResponseData);
 
-        await setStoredUserId(
-          typeof loginUserId === "string" ? Number(loginUserId) : loginUserId,
-        );
+        await setStoredUserId(loginUserId);
 
         await requestNotificationPermission();
         await sendFCMActiveStatus(true, loginUserId ?? null);
 
-        // Lưu lại login thường (không phải FaceID)
-        await Keychain.setGenericPassword(userName, userPassword, {
-          service: "auth-login",
-          accessible: Keychain.ACCESSIBLE.WHEN_PASSCODE_SET_THIS_DEVICE_ONLY,
-          accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET,
-        });
+        await saveIosBiometricCredentials(userName, userPassword);
 
         // Lấy quyền
         // const permissionRes = await getPermission();
@@ -102,6 +125,8 @@ export default function LoginScreen() {
         if (Platform.OS === "ios") {
           setIosAuthenticated(true);
         }
+      } else {
+        Alert.alert("Đăng nhập thất bại", "Sai tài khoản hoặc mật khẩu.");
       }
     } catch (err: any) {
       const status = err.response?.status;
@@ -140,16 +165,6 @@ export default function LoginScreen() {
         return;
       }
 
-      // Check user có bật FaceID trong Settings chưa
-      const enabled = await AsyncStorage.getItem("faceid-enabled");
-      if (enabled !== "1") {
-        Alert.alert(
-          "FaceID",
-          "Bạn chưa bật đăng nhập bằng FaceID trong Cài đặt. Vui lòng đăng nhập bằng tài khoản và mật khẩu, sau đó vào Cài đặt để bật tính năng này.",
-        );
-        return;
-      }
-
       // Get credentials → iOS sẽ auto prompt FaceID
       const credentials = await Keychain.getGenericPassword({
         service: "auth-login",
@@ -176,7 +191,7 @@ export default function LoginScreen() {
       );
 
       if (response?.data?.accessToken) {
-        const loginResponseData = response.data as any;
+        const loginResponseData = response.data;
 
         await setToken(loginResponseData.accessToken);
         await setRefreshToken(loginResponseData.refreshToken ?? null);
@@ -184,16 +199,9 @@ export default function LoginScreen() {
         setTokenInApi(loginResponseData.accessToken);
         setRefreshInApi(loginResponseData.refreshToken ?? null);
 
-        const loginUserId =
-          loginResponseData?.iD_User ??
-          loginResponseData?.ID_User ??
-          loginResponseData?.userId ??
-          loginResponseData?.id ??
-          null;
+        const loginUserId = getLoginUserId(loginResponseData);
 
-        await setStoredUserId(
-          typeof loginUserId === "string" ? Number(loginUserId) : loginUserId,
-        );
+        await setStoredUserId(loginUserId);
 
         await requestNotificationPermission();
         await sendFCMActiveStatus(true, loginUserId ?? null);
@@ -219,10 +227,10 @@ export default function LoginScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <LinearGradient
-        colors={["#0F4D3A", "#1B5E20"]}
+        colors={[colors.brandGreen, "#1B5E20"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ flex: 1 }}
+        style={styles.gradient}
       >
         <KeyboardAwareScrollView contentContainerStyle={{ flexGrow: 1 }}>
           <View style={styles.container}>
@@ -306,6 +314,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  gradient: { flex: 1 },
   logoContainer: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -353,7 +362,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 55,
     borderRadius: 12,
-    backgroundColor: "#0F4D3A",
+    backgroundColor: colors.brandGreen,
     justifyContent: "center",
     alignItems: "center",
   },

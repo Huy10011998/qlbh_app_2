@@ -3,8 +3,9 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StyleSheet } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { subscribeAppRefetch } from "../utils/AppRefetchBus";
-import { danhSachDatHangCaPhe } from "../services/data/CallApi";
+import { useAppRefetch } from "../hooks/useAppRefetch";
+import { fetchCafeOrderCount } from "../services/data/CafeOrderData";
+import { colors } from "../constants/theme";
 
 import HomeStack from "./HomeStack";
 import SettingStack from "./SettingStack";
@@ -22,12 +23,12 @@ export default function Tabs() {
 
   const fetchBadge = useCallback(async () => {
     try {
-      const [orderRes, listRes] = await Promise.all([
-        danhSachDatHangCaPhe<any>(1),
-        danhSachDatHangCaPhe<any>(4),
+      const [orderCount, listCount] = await Promise.all([
+        fetchCafeOrderCount(1),
+        fetchCafeOrderCount(4),
       ]);
-      setOrderBadge(orderRes?.data?.items?.length ?? 0);
-      setListBadge(listRes?.data?.items?.length ?? 0);
+      setOrderBadge(orderCount);
+      setListBadge(listCount);
     } catch {
       setOrderBadge(0);
       setListBadge(0);
@@ -36,15 +37,9 @@ export default function Tabs() {
 
   useEffect(() => {
     fetchBadge();
-
-    const unsub = subscribeAppRefetch(() => {
-      fetchBadge();
-    });
-
-    return () => {
-      unsub();
-    };
   }, [fetchBadge]);
+
+  useAppRefetch(fetchBadge);
 
   return (
     <Tab.Navigator
@@ -53,9 +48,9 @@ export default function Tabs() {
         tabBarHideOnKeyboard: true,
         lazy: true,
         tabBarLabelStyle: styles.label,
-        tabBarActiveTintColor: "#fff",
+        tabBarActiveTintColor: colors.white,
         tabBarStyle: {
-          backgroundColor: "#0F4D3A",
+          backgroundColor: colors.brandGreen,
           borderTopWidth: StyleSheet.hairlineWidth,
           height: TAB_HEIGHT + insets.bottom,
           paddingBottom: insets.bottom,
@@ -134,7 +129,7 @@ const styles = StyleSheet.create({
   },
   badge: {
     backgroundColor: "#FF3B30", // ← màu đỏ như iOS
-    color: "#fff",
+    color: colors.white,
     fontSize: 11,
   },
 });

@@ -167,8 +167,20 @@ export const formatTien = (so?: number | null): string => {
   return so.toLocaleString("vi-VN") + "đ";
 };
 
+const getStableDatHangId = (item: DatHangApiItem): string => {
+  if (item.id != null) return String(item.id);
+  return [
+    item.maDatHang,
+    item.ngayDatHang,
+    item.iD_BanCaPhe_MoTa ?? item.thongTinDat,
+    item.tongTien,
+  ]
+    .filter((value) => value != null && value !== "")
+    .join("-");
+};
+
 export const mapApiItem = (item: DatHangApiItem): ChungTu => ({
-  id: String(item.id ?? Math.random()),
+  id: getStableDatHangId(item),
   rawId: item.id ?? 0,
   maDatHang: item.maDatHang ?? "",
   ngay: formatNgay(item.ngayDatHang),

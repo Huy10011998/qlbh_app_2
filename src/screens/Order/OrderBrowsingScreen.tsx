@@ -2,96 +2,22 @@ import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  RefreshControl,
   Alert,
 } from "react-native";
-import {
-  danhSachDatHangCaPhe,
-  danhSachDatHangCaPheChiTiet,
-  updateTrangThaiPhucVu,
-} from "../../services/data/CallApi";
-import {
-  DatHangApiItem,
-  ChungTu,
-  ChiTietApiItem,
-  ChiTietItem,
-} from "../../types/Api.d";
-import { ChungTuItemProps } from "../../types";
+import { updateTrangThaiPhucVu } from "../../services/data/CallApi";
+import { ChungTu, ChiTietItem } from "../../types/Api.d";
 import { formatTien, mapApiItem } from "../../utils/Helper";
-import { emitAppRefetch, subscribeAppRefetch } from "../../utils/AppRefetchBus";
-
-// ─── Item Component ───────────────────────────────────────────────────────────
-
-const ChungTuItem: React.FC<ChungTuItemProps> = ({
-  item,
-  checked,
-  onToggle,
-}) => (
-  <View style={[styles.itemContainer, checked && styles.itemContainerChecked]}>
-    <View style={styles.itemRow}>
-      <TouchableOpacity
-        style={styles.checkboxHit}
-        onPress={() => onToggle(item.id)}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-          {checked && <Text style={styles.checkmarkText}>✓</Text>}
-        </View>
-      </TouchableOpacity>
-
-      <View style={styles.itemContent}>
-        {/* Row 1: mã + thời gian */}
-        <View style={styles.itemHeader}>
-          <Text style={styles.maSo}>{item.maDatHang}</Text>
-          <Text style={styles.ngay}>
-            {item.ngay} {item.thoiGian}
-          </Text>
-        </View>
-
-        {/* Row 2: vị trí */}
-        <Text style={styles.nguoiLap}>{item.viTri}</Text>
-
-        {/* Row 3: chi tiết hàng hoá */}
-        {item.chiTiet.length > 0 && (
-          <View style={styles.chiTietContainer}>
-            {item.chiTiet.map((ct, idx) => (
-              <View key={idx} style={styles.chiTietRow}>
-                <Text style={styles.chiTietTen} numberOfLines={1}>
-                  • {ct.tenHang}
-                </Text>
-                <View style={styles.chiTietSLBadge}>
-                  <Text style={styles.chiTietSL}>x{ct.soLuong}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Row 4: trạng thái + tổng tiền */}
-        <View style={styles.sanPhamRow}>
-          <View style={styles.trangThaiBadge}>
-            <Text style={styles.trangThaiText}>{item.trangThai}</Text>
-          </View>
-          <View style={styles.soLuongBadge}>
-            <Text style={styles.soLuongLabel}>Tổng: </Text>
-            <Text style={styles.soLuongValue}>{formatTien(item.tongTien)}</Text>
-          </View>
-        </View>
-      </View>
-    </View>
-    <View style={styles.divider} />
-  </View>
-);
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
+import { emitAppRefetch } from "../../utils/AppRefetchBus";
+import { useAppRefetch } from "../../hooks/useAppRefetch";
+import ScreenStateView from "../../components/ui/ScreenStateView";
+import { fetchCafeOrdersWithDetails } from "../../services/data/CafeOrderData";
+import { colors } from "../../constants/theme";
+import { log, warn } from "../../utils/Logger";
 
 const OrderBrowsingScreen: React.FC = () => {
   const [danhSach, setDanhSach] = useState<ChungTu[]>([]);
@@ -102,47 +28,59 @@ const OrderBrowsingScreen: React.FC = () => {
 
   const hasChecked = checkedIds.size > 0;
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
-
   const fetchDanhSach = useCallback(async (isRefresh = false) => {
+    log("[OrderBrowsing] fetchDanhSach:start", { isRefresh });
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
 
     try {
-      const res = await danhSachDatHangCaPhe<any>(1);
-      const rawItems: DatHangApiItem[] = res?.data?.items ?? [];
-      const mapped = rawItems.map(mapApiItem);
-      setDanhSach(mapped);
+      const { orders, details, detailsByOrderId } =
+        await fetchCafeOrdersWithDetails(1);
 
-      const ids = rawItems
-        .map((i) => i.id)
-        .filter((id): id is number => typeof id === "number");
+      log("[OrderBrowsing] fetchDanhSach:api-response", {
+        orderCount: orders.length,
+        detailCount: details.length,
+        detailGroupCount: detailsByOrderId.size,
+        orderIds: orders.map((order) => order.id ?? null),
+      });
 
-      if (ids.length === 0) return;
+      const mappedDanhSach = orders.map((order) => {
+        const mappedItem = mapApiItem(order);
+        const rawOrderId = order.id ?? 0;
+        const chiTiet = (detailsByOrderId.get(rawOrderId) ?? []).map<ChiTietItem>(
+          (detail) => ({
+            tenHang: detail.iD_SanPham_MoTa ?? "",
+            soLuong: detail.soLuong ?? 0,
+          }),
+        );
 
-      const resChiTiet = await danhSachDatHangCaPheChiTiet<any>(ids);
-      const chiTietRaw: ChiTietApiItem[] = resChiTiet?.data?.items ?? [];
-
-      const chiTietMap = new Map<number, ChiTietItem[]>();
-      for (const ct of chiTietRaw) {
-        const key = ct.iD_DatHang_BanCaPhe ?? 0;
-        if (!chiTietMap.has(key)) chiTietMap.set(key, []);
-        chiTietMap.get(key)!.push({
-          tenHang: ct.iD_SanPham_MoTa ?? "",
-          soLuong: ct.soLuong ?? 0,
+        log("[OrderBrowsing] fetchDanhSach:map-order", {
+          rawOrderId,
+          stableId: mappedItem.id,
+          maDatHang: mappedItem.maDatHang,
+          trangThai: mappedItem.trangThai,
+          chiTietCount: chiTiet.length,
+          viTri: mappedItem.viTri,
         });
-      }
 
-      setDanhSach(
-        mapped.map((item) => ({
-          ...item,
-          chiTiet: chiTietMap.get(item.rawId) ?? [],
-        })),
-      );
-    } catch {
+        return {
+          ...mappedItem,
+          chiTiet,
+        };
+      });
+
+      log("[OrderBrowsing] fetchDanhSach:mapped-result", {
+        count: mappedDanhSach.length,
+        ids: mappedDanhSach.map((item) => item.id),
+      });
+
+      setDanhSach(mappedDanhSach);
+    } catch (fetchError) {
+      warn("[OrderBrowsing] fetchDanhSach:error", fetchError);
       setError("Không tải được danh sách. Vui lòng thử lại.");
     } finally {
+      log("[OrderBrowsing] fetchDanhSach:finish");
       setLoading(false);
       setRefreshing(false);
     }
@@ -152,28 +90,38 @@ const OrderBrowsingScreen: React.FC = () => {
     fetchDanhSach();
   }, [fetchDanhSach]);
 
-  // Thêm useEffect này sau useEffect([fetchDanhSach])
   useEffect(() => {
-    const unsub = subscribeAppRefetch((source) => {
-      if (
-        source === "notification" ||
-        source === "foreground" ||
-        source === "network"
-      ) {
-        fetchDanhSach(true);
-      }
+    log("[OrderBrowsing] state:danhSach", {
+      count: danhSach.length,
+      items: danhSach.map((item) => ({
+        id: item.id,
+        rawId: item.rawId,
+        maDatHang: item.maDatHang,
+        chiTietCount: item.chiTiet.length,
+      })),
     });
-    return unsub;
-  }, [fetchDanhSach]);
+  }, [danhSach]);
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    log("[OrderBrowsing] state:view", {
+      loading,
+      refreshing,
+      error,
+      danhSachCount: danhSach.length,
+      checkedCount: checkedIds.size,
+    });
+  }, [checkedIds.size, danhSach.length, error, loading, refreshing]);
+
+  useAppRefetch(
+    useCallback(() => {
+      fetchDanhSach(true);
+    }, [fetchDanhSach]),
+  );
 
   const getCheckedRawIds = (): number[] =>
     danhSach
       .filter((item) => checkedIds.has(item.id))
       .map((item) => item.rawId);
-
-  // ── Handlers ─────────────────────────────────────────────────────────────
 
   const handleToggle = useCallback((id: string) => {
     setCheckedIds((prev) => {
@@ -193,7 +141,6 @@ const OrderBrowsingScreen: React.FC = () => {
         { text: "Huỷ", style: "cancel" },
         {
           text: "Duyệt",
-          style: "default",
           onPress: async () => {
             try {
               await updateTrangThaiPhucVu(ids, 2);
@@ -247,17 +194,13 @@ const OrderBrowsingScreen: React.FC = () => {
         { text: "Huỷ", style: "cancel" },
         {
           text: "Duyệt tất cả",
-          style: "default",
           onPress: async () => {
             try {
               await updateTrangThaiPhucVu(ids, 2);
               setCheckedIds(new Set());
               await fetchDanhSach(true);
               emitAppRefetch("notification");
-              Alert.alert(
-                "Thành công",
-                `Đã duyệt toàn bộ ${ids.length} đơn hàng.`,
-              );
+              Alert.alert("Thành công", `Đã duyệt toàn bộ ${ids.length} đơn hàng.`);
             } catch {
               Alert.alert("Lỗi", "Không thể duyệt đơn hàng. Vui lòng thử lại.");
             }
@@ -267,84 +210,135 @@ const OrderBrowsingScreen: React.FC = () => {
     );
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
+      <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
+      <View style={styles.flex}>
         {loading && (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={TEAL} />
-            <Text style={styles.loadingText}>Đang tải...</Text>
-          </View>
+          <ScreenStateView
+            loading
+            title="Đang tải..."
+            color={TEAL}
+            containerStyle={styles.centerContainer}
+            titleStyle={styles.loadingText}
+          />
         )}
 
         {!loading && error && (
-          <View style={styles.centerContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={() => fetchDanhSach()}
-            >
-              <Text style={styles.retryBtnText}>Thử lại</Text>
-            </TouchableOpacity>
-          </View>
+          <ScreenStateView
+            title={error}
+            actionLabel="Thử lại"
+            onActionPress={() => fetchDanhSach()}
+            color={TEAL}
+            containerStyle={styles.centerContainer}
+            titleStyle={styles.errorText}
+            actionStyle={styles.retryBtn}
+            actionTextStyle={styles.retryBtnText}
+          />
         )}
 
         {!loading && !error && (
-          <FlatList
-            data={danhSach}
-            keyExtractor={(i) => i.id}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={() => fetchDanhSach(true)}
-                colors={[TEAL]}
-                tintColor={TEAL}
-              />
-            }
-            ListHeaderComponent={
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.listContent,
+              danhSach.length === 0 && styles.listContentEmpty,
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.content}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Đơn đặt hàng cần duyệt</Text>
                 {danhSach.length > 0 && (
                   <Text style={styles.sectionCount}>{danhSach.length} đơn</Text>
                 )}
               </View>
-            }
-            ListEmptyComponent={
-              <View style={styles.centerContainer}>
-                <Text style={styles.emptyIcon}>🧾</Text>
-                <Text style={styles.emptyText}>
-                  Không có đơn hàng nào cần duyệt.
-                </Text>
-              </View>
-            }
-            renderItem={({ item }) => (
-              <ChungTuItem
-                item={item}
-                checked={checkedIds.has(item.id)}
-                onToggle={handleToggle}
-              />
-            )}
-            contentContainerStyle={[
-              styles.listContent,
-              danhSach.length === 0 && styles.listContentEmpty,
-            ]}
-            showsVerticalScrollIndicator={false}
-          />
+
+              {danhSach.length === 0 ? (
+                <ScreenStateView
+                  icon={<Text style={styles.emptyIcon}>🧾</Text>}
+                  title="Không có đơn hàng nào cần duyệt."
+                  containerStyle={styles.centerContainer}
+                  titleStyle={styles.emptyText}
+                />
+              ) : (
+                danhSach.map((item) => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.itemContainer,
+                      checkedIds.has(item.id) && styles.itemContainerChecked,
+                    ]}
+                  >
+                    <View style={styles.itemRow}>
+                      <TouchableOpacity
+                        style={styles.checkboxHit}
+                        onPress={() => handleToggle(item.id)}
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            styles.checkbox,
+                            checkedIds.has(item.id) && styles.checkboxChecked,
+                          ]}
+                        >
+                          {checkedIds.has(item.id) && (
+                            <Text style={styles.checkmarkText}>✓</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+
+                      <View style={styles.itemContent}>
+                        <View style={styles.itemHeader}>
+                          <Text style={styles.maSo}>{item.maDatHang}</Text>
+                          <Text style={styles.ngay}>
+                            {item.ngay} {item.thoiGian}
+                          </Text>
+                        </View>
+
+                        <Text style={styles.nguoiLap}>{item.viTri}</Text>
+
+                        {item.chiTiet.length > 0 && (
+                          <View style={styles.chiTietContainer}>
+                            {item.chiTiet.map((ct, idx) => (
+                              <View key={idx} style={styles.chiTietRow}>
+                                <Text style={styles.chiTietTen} numberOfLines={1}>
+                                  • {ct.tenHang}
+                                </Text>
+                                <View style={styles.chiTietSLBadge}>
+                                  <Text style={styles.chiTietSL}>x{ct.soLuong}</Text>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        <View style={styles.sanPhamRow}>
+                          <View style={styles.trangThaiBadge}>
+                            <Text style={styles.trangThaiText}>{item.trangThai}</Text>
+                          </View>
+                          <View style={styles.soLuongBadge}>
+                            <Text style={styles.soLuongLabel}>Tổng: </Text>
+                            <Text style={styles.soLuongValue}>
+                              {formatTien(item.tongTien)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.divider} />
+                  </View>
+                ))
+              )}
+            </View>
+          </ScrollView>
         )}
 
         {hasChecked && (
           <View style={styles.bottomContainer}>
             <View style={styles.selectedBar}>
               <Text style={styles.selectedBarText}>
-                Đã chọn{" "}
-                <Text style={styles.selectedBarNum}>{checkedIds.size}</Text> đơn
+                Đã chọn <Text style={styles.selectedBarNum}>{checkedIds.size}</Text> đơn
               </Text>
               <TouchableOpacity
                 onPress={() => setCheckedIds(new Set())}
@@ -380,23 +374,23 @@ const OrderBrowsingScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         )}
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const TEAL = "#2BBFB3";
-const GREEN = "#4CAF50";
-const AMBER = "#1565c0";
-const SLATE = "#B0C4D8";
+const TEAL = colors.teal;
+const GREEN = colors.success;
+const AMBER = colors.info;
+const SLATE = colors.slateAction;
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
+  safeArea: { flex: 1, backgroundColor: colors.screenSoft },
   flex: { flex: 1 },
-  listContent: { paddingBottom: 8 },
+  scrollView: { flex: 1, backgroundColor: colors.screenSoft },
+  listContent: { flexGrow: 1, paddingBottom: 8 },
   listContentEmpty: { flex: 1 },
+  content: { paddingHorizontal: 12, paddingTop: 12 },
 
   centerContainer: {
     flex: 1,
@@ -418,9 +412,11 @@ const styles = StyleSheet.create({
   retryBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 
   sectionHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+    borderRadius: 12,
+    backgroundColor: "#F1FBF9",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -437,20 +433,23 @@ const styles = StyleSheet.create({
   },
 
   itemContainer: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    paddingHorizontal: 14,
     paddingTop: 12,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   itemContainerChecked: {
     borderWidth: 1.5,
     borderColor: TEAL,
-    borderRadius: 8,
-    marginHorizontal: 8,
-    paddingHorizontal: 10,
-    marginBottom: 2,
+    paddingHorizontal: 12,
   },
   itemRow: { flexDirection: "row", alignItems: "flex-start" },
-
   checkboxHit: {
     width: 44,
     height: 44,
@@ -468,7 +467,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.white,
   },
   checkboxChecked: { backgroundColor: TEAL },
   checkmarkText: {
@@ -536,18 +535,18 @@ const styles = StyleSheet.create({
   },
   soLuongLabel: { fontSize: 15, color: "#666" },
   soLuongValue: { fontSize: 15, fontWeight: "700", color: TEAL },
-
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#e0e0e0",
     marginTop: 4,
+    marginHorizontal: -14,
   },
 
   bottomContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: Platform.OS === "ios" ? 10 : 14,
+    paddingBottom: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#e0e0e0",
     gap: 10,
@@ -564,7 +563,6 @@ const styles = StyleSheet.create({
   selectedBarText: { fontSize: 15, color: "#444" },
   selectedBarNum: { fontWeight: "700", color: TEAL },
   clearText: { fontSize: 15, color: "#e05c3a", fontWeight: "500" },
-
   actionRow: { flexDirection: "row", gap: 12 },
   btnTiepNhan: {
     flex: 1,

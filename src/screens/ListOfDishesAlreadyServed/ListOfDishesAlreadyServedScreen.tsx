@@ -2,20 +2,18 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  ActivityIndicator,
-  RefreshControl,
 } from "react-native";
 import { formatTien, mapApiItem } from "../../utils/Helper";
-import {
-  danhSachDatHangCaPhe,
-  danhSachDatHangCaPheChiTiet,
-} from "../../services/data/CallApi";
-import { DatHangApiItem } from "../../types/Api.d";
-import { subscribeAppRefetch } from "../../utils/AppRefetchBus";
+import { ChiTietApiItem, DatHangApiItem } from "../../types/Api.d";
+import { useAppRefetch } from "../../hooks/useAppRefetch";
+import { warn } from "../../utils/Logger";
+import ScreenStateView from "../../components/ui/ScreenStateView";
+import { fetchCafeOrdersWithDetails } from "../../services/data/CafeOrderData";
+import { colors } from "../../constants/theme";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,18 +35,13 @@ interface PhieuDaLenMon {
 
 // ─── API response types ───────────────────────────────────────────────────────
 
-interface ChiTietItem {
-  iD_DatHang_BanCaPhe: number;
-  iD_SanPham_MoTa: string | null;
-  soLuong: number;
-  giaTien: number;
-}
+type ChiTietDaLenMonApiItem = ChiTietApiItem & { giaTien?: number };
 
 // ─── Map API data → PhieuDaLenMon ────────────────────────────────────────────
 
 const mapToPhieu = (
   datHang: DatHangApiItem,
-  chiTiet: ChiTietItem[],
+  chiTiet: ChiTietDaLenMonApiItem[],
 ): PhieuDaLenMon => {
   const base = mapApiItem(datHang);
 
@@ -144,11 +137,14 @@ const PhieuItem: React.FC<{ item: PhieuDaLenMon; index: number }> = ({
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 const EmptyState: React.FC = () => (
-  <View style={styles.empty}>
-    <Text style={styles.emptyIcon}>🍽️</Text>
-    <Text style={styles.emptyTitle}>Chưa có món nào được lên</Text>
-    <Text style={styles.emptySub}>Các phiếu đã duyệt sẽ hiện ở đây</Text>
-  </View>
+  <ScreenStateView
+    icon={<Text style={styles.emptyIcon}>🍽️</Text>}
+    title="Chưa có món nào được lên"
+    subtitle="Các phiếu đã duyệt sẽ hiện ở đây"
+    containerStyle={styles.empty}
+    titleStyle={styles.emptyTitle}
+    subtitleStyle={styles.emptySub}
+  />
 );
 
 // ─── Summary header ───────────────────────────────────────────────────────────
@@ -187,81 +183,51 @@ const TRANG_THAI_DA_LEN_MON = 4;
 const ListOfDishesAlreadyServed: React.FC = () => {
   const [data, setData] = useState<PhieuDaLenMon[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       setError(null);
 
-      // 1️⃣ Lấy danh sách đặt hàng trạng thái "Đã lên món"
-      const res = await danhSachDatHangCaPhe<{
-        data: { items: DatHangApiItem[] };
-      }>(TRANG_THAI_DA_LEN_MON);
+      const { orders, detailsByOrderId } = await fetchCafeOrdersWithDetails<
+        DatHangApiItem,
+        ChiTietDaLenMonApiItem
+      >(TRANG_THAI_DA_LEN_MON);
 
-      const items: DatHangApiItem[] = res?.data?.items ?? [];
-
-      if (items.length === 0) {
+      if (orders.length === 0) {
         setData([]);
         return;
       }
 
-      // 2️⃣ Lấy ids rồi truyền vào chi tiết
-      const ids = items
-        .map((i) => i.id)
-        .filter((id): id is number => id !== undefined);
-
-      const chiTietRes = await danhSachDatHangCaPheChiTiet<{
-        data: { items: ChiTietItem[] };
-      }>(ids);
-
-      const chiTietAll: ChiTietItem[] = chiTietRes?.data?.items ?? [];
-
-      // 3️⃣ Map từng đặt hàng với chi tiết — 1 phiếu = 1 card
-      const mapped: PhieuDaLenMon[] = items.map((datHang) => {
-        const chiTietCuaPhieu = chiTietAll.filter(
-          (ct) => ct.iD_DatHang_BanCaPhe === datHang.id,
-        );
+      const mapped: PhieuDaLenMon[] = orders.map((datHang) => {
+        const chiTietCuaPhieu =
+          datHang.id == null ? [] : detailsByOrderId.get(datHang.id) ?? [];
         return mapToPhieu(datHang, chiTietCuaPhieu);
       });
 
       setData(mapped);
     } catch (err) {
-      console.error("Lỗi fetch danh sách đã lên món:", err);
+      warn("Lỗi fetch danh sách đã lên món:", err);
       setError("Không thể tải dữ liệu. Vui lòng thử lại.");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    const unsub = subscribeAppRefetch((source) => {
-      if (
-        source === "notification" ||
-        source === "foreground" ||
-        source === "network"
-      ) {
-        setRefreshing(true);
-        fetchData();
-      }
-    });
-    return unsub;
-  }, [fetchData]);
+  useAppRefetch(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData]),
+  );
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
     fetchData();
   }, [fetchData]);
 
   if (loading) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]}>
-        <ActivityIndicator size="large" color={TEAL} />
+        <ScreenStateView loading color={TEAL} containerStyle={styles.center} />
       </SafeAreaView>
     );
   }
@@ -269,7 +235,7 @@ const ListOfDishesAlreadyServed: React.FC = () => {
   if (error) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]}>
-        <Text style={styles.errorText}>{error}</Text>
+        <ScreenStateView title={error} titleStyle={styles.errorText} />
       </SafeAreaView>
     );
   }
@@ -277,55 +243,47 @@ const ListOfDishesAlreadyServed: React.FC = () => {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#F7F8FA" />
-      <FlatList
-        data={data}
-        keyExtractor={(i) => i.id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[TEAL]}
-            tintColor={TEAL}
-          />
-        }
-        // Trong FlatList
+      <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={[
           styles.listContent,
           data.length === 0 && styles.listContentEmpty,
         ]}
-        ListHeaderComponent={
-          <>
-            <View style={styles.listHeader}>
-              <Text style={styles.sectionTitle}>Danh sách đã lên món</Text>
-              <Text style={styles.sectionSub}>
-                {data.length} phiếu · hôm nay
-              </Text>
-            </View>
-            {data.length > 0 && <SummaryHeader data={data} />}
-          </>
-        }
-        renderItem={({ item, index }) => (
-          <PhieuItem item={item} index={index} />
-        )}
-        ListEmptyComponent={<EmptyState />}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         showsVerticalScrollIndicator={false}
-      />
+      >
+        <View style={styles.listHeader}>
+          <Text style={styles.sectionTitle}>Danh sách đã lên món</Text>
+          <Text style={styles.sectionSub}>{data.length} phiếu · hôm nay</Text>
+        </View>
+
+        {data.length > 0 && <SummaryHeader data={data} />}
+
+        {data.length === 0 ? (
+          <EmptyState />
+        ) : (
+          data.map((item, index) => (
+            <View key={item.id}>
+              <PhieuItem item={item} index={index} />
+              {index < data.length - 1 && <View style={styles.itemSeparator} />}
+            </View>
+          ))
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const TEAL = "#2BBFB3";
-const TEAL_BG = "#EAF8F7";
-const GREEN = "#4CAF50";
-const GREEN_BG = "#EDF7EE";
+const TEAL = colors.teal;
+const TEAL_BG = colors.tealSoft;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#F7F8FA" },
+  scrollView: { flex: 1, backgroundColor: "#F7F8FA" },
   center: { justifyContent: "center", alignItems: "center" },
   listContent: { paddingHorizontal: 12, paddingBottom: 24 },
+  itemSeparator: { height: 8 },
   errorText: { fontSize: 14, color: "#e53935", textAlign: "center" },
 
   listHeader: { paddingVertical: 12, paddingHorizontal: 4 },
